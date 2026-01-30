@@ -1,5 +1,104 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import type { Route } from "./+types/home";
+
+// API helper functions
+const api = {
+	async getRegisters(): Promise<Register[]> {
+		const res = await fetch("/api/registers");
+		if (!res.ok) throw new Error("Failed to fetch registers");
+		return res.json();
+	},
+
+	async createRegister(data: Partial<Register>): Promise<{ id: string; success: boolean }> {
+		const res = await fetch("/api/registers", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ action: "create_register", ...data }),
+		});
+		if (!res.ok) throw new Error("Failed to create register");
+		return res.json();
+	},
+
+	async updateRegister(data: Partial<Register> & { id: string }): Promise<{ success: boolean }> {
+		const res = await fetch("/api/registers", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ action: "update_register", ...data }),
+		});
+		if (!res.ok) throw new Error("Failed to update register");
+		return res.json();
+	},
+
+	async deleteRegister(id: string): Promise<{ success: boolean }> {
+		const res = await fetch("/api/registers", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ action: "delete_register", id }),
+		});
+		if (!res.ok) throw new Error("Failed to delete register");
+		return res.json();
+	},
+
+	async createAssetGroup(data: {
+		registerId: string;
+		id?: string;
+		name: string;
+		tool?: string;
+		color?: string;
+		start?: Point;
+		end?: Point;
+		path?: Point[];
+		isWholeSite?: boolean;
+	}): Promise<{ id: string; success: boolean }> {
+		const res = await fetch("/api/registers", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ action: "create_asset_group", ...data }),
+		});
+		if (!res.ok) throw new Error("Failed to create asset group");
+		return res.json();
+	},
+
+	async deleteAssetGroup(id: string): Promise<{ success: boolean }> {
+		const res = await fetch("/api/registers", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ action: "delete_asset_group", id }),
+		});
+		if (!res.ok) throw new Error("Failed to delete asset group");
+		return res.json();
+	},
+
+	async createAsset(data: {
+		assetGroupId: string;
+		id?: string;
+		itemType?: string;
+		name: string;
+		serialNumber?: string;
+		purchasePrice?: number;
+		purchaseDate?: string;
+		photo?: string;
+		incomplete?: boolean;
+	}): Promise<{ id: string; success: boolean }> {
+		const res = await fetch("/api/registers", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ action: "create_asset", ...data }),
+		});
+		if (!res.ok) throw new Error("Failed to create asset");
+		return res.json();
+	},
+
+	async deleteAsset(id: string): Promise<{ success: boolean }> {
+		const res = await fetch("/api/registers", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ action: "delete_asset", id }),
+		});
+		if (!res.ok) throw new Error("Failed to delete asset");
+		return res.json();
+	},
+};
 
 export function meta({}: Route.MetaArgs) {
 	return [
@@ -173,6 +272,7 @@ interface Room {
 }
 
 interface Register {
+	id?: string;
 	address: string;
 	sitePlan: string | null;
 	rooms: Room[];
@@ -193,6 +293,7 @@ export default function Home() {
 	const [isCreating, setIsCreating] = useState(false);
 	const [address, setAddress] = useState("");
 	const [registers, setRegisters] = useState<Register[]>([]);
+	const [isLoading, setIsLoading] = useState(false);
 	const [suggestions, setSuggestions] = useState<string[]>([]);
 	const [showSuggestions, setShowSuggestions] = useState(false);
 	const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -236,6 +337,25 @@ export default function Home() {
 	const canvasRef = useRef<HTMLDivElement>(null);
 	const itemTypeInputRef = useRef<HTMLInputElement>(null);
 	const itemTypeSuggestionsRef = useRef<HTMLUListElement>(null);
+
+	// Load registers from API when authenticated
+	const loadRegisters = useCallback(async () => {
+		try {
+			setIsLoading(true);
+			const data = await api.getRegisters();
+			setRegisters(data);
+		} catch (err) {
+			console.error("Failed to load registers:", err);
+		} finally {
+			setIsLoading(false);
+		}
+	}, []);
+
+	useEffect(() => {
+		if (isAuthenticated) {
+			loadRegisters();
+		}
+	}, [isAuthenticated, loadRegisters]);
 
 	useEffect(() => {
 		const handleClickOutside = (event: MouseEvent) => {
@@ -311,14 +431,24 @@ export default function Home() {
 		}
 	};
 
-	const handleCreateRegister = (e: React.FormEvent) => {
+	const handleCreateRegister = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (address.trim()) {
-			setRegisters([...registers, { address: address.trim(), sitePlan: null, rooms: [] }]);
-			setAddress("");
-			setIsCreating(false);
-			setSuggestions([]);
-			setShowSuggestions(false);
+			try {
+				const result = await api.createRegister({ address: address.trim() });
+				setRegisters([...registers, { 
+					id: result.id, 
+					address: address.trim(), 
+					sitePlan: null, 
+					rooms: [] 
+				}]);
+				setAddress("");
+				setIsCreating(false);
+				setSuggestions([]);
+				setShowSuggestions(false);
+			} catch (err) {
+				console.error("Failed to create register:", err);
+			}
 		}
 	};
 
@@ -333,22 +463,57 @@ export default function Home() {
 		const file = e.target.files?.[0];
 		if (file && editingIndex !== null) {
 			const reader = new FileReader();
-			reader.onloadend = () => {
+			reader.onloadend = async () => {
+				const sitePlan = reader.result as string;
 				const updatedRegisters = [...registers];
-				updatedRegisters[editingIndex].sitePlan = reader.result as string;
+				updatedRegisters[editingIndex].sitePlan = sitePlan;
 				setRegisters(updatedRegisters);
+				
+				// Sync to API
+				const register = updatedRegisters[editingIndex];
+				if (register.id) {
+					try {
+						await api.updateRegister({
+							id: register.id,
+							address: register.address,
+							sitePlan,
+							ownsLand: register.ownsLand,
+							ownsBuildings: register.ownsBuildings,
+							wizardCompleted: register.wizardCompleted,
+						});
+					} catch (err) {
+						console.error("Failed to update register:", err);
+					}
+				}
 			};
 			reader.readAsDataURL(file);
 		}
 	};
 
-	const handleRemoveSitePlan = () => {
+	const handleRemoveSitePlan = async () => {
 		if (editingIndex !== null) {
 			const updatedRegisters = [...registers];
 			updatedRegisters[editingIndex].sitePlan = null;
 			updatedRegisters[editingIndex].rooms = [];
 			setRegisters(updatedRegisters);
 			setWizardActive(false);
+			
+			// Sync to API
+			const register = updatedRegisters[editingIndex];
+			if (register.id) {
+				try {
+					await api.updateRegister({
+						id: register.id,
+						address: register.address,
+						sitePlan: null,
+						ownsLand: register.ownsLand,
+						ownsBuildings: register.ownsBuildings,
+						wizardCompleted: register.wizardCompleted,
+					});
+				} catch (err) {
+					console.error("Failed to update register:", err);
+				}
+			}
 		}
 	};
 
@@ -497,21 +662,42 @@ export default function Home() {
 		setPreviewShape(null);
 	};
 
-	const handleSaveRoom = (e: React.FormEvent) => {
+	const handleSaveRoom = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (namingRoom && roomName.trim() && editingIndex !== null) {
 			const updatedRegisters = [...registers];
-			updatedRegisters[editingIndex].rooms.push({
+			const newRoom = {
 				...namingRoom,
 				name: roomName.trim(),
-			});
+			};
+			updatedRegisters[editingIndex].rooms.push(newRoom);
 			setRegisters(updatedRegisters);
 			setNamingRoom(null);
 			setRoomName("");
+			
+			// Sync to API
+			const register = updatedRegisters[editingIndex];
+			if (register.id) {
+				try {
+					await api.createAssetGroup({
+						registerId: register.id,
+						id: newRoom.id,
+						name: newRoom.name,
+						tool: newRoom.tool,
+						color: newRoom.color,
+						start: newRoom.start,
+						end: newRoom.end,
+						path: newRoom.path,
+						isWholeSite: newRoom.isWholeSite,
+					});
+				} catch (err) {
+					console.error("Failed to create asset group:", err);
+				}
+			}
 		}
 	};
 
-	const handleDeleteRoom = (roomId: string) => {
+	const handleDeleteRoom = async (roomId: string) => {
 		if (editingIndex !== null) {
 			const updatedRegisters = [...registers];
 			updatedRegisters[editingIndex].rooms = updatedRegisters[editingIndex].rooms.filter(
@@ -519,6 +705,13 @@ export default function Home() {
 			);
 			setRegisters(updatedRegisters);
 			setSelectedRoomId(null);
+			
+			// Sync to API
+			try {
+				await api.deleteAssetGroup(roomId);
+			} catch (err) {
+				console.error("Failed to delete asset group:", err);
+			}
 		}
 	};
 
@@ -548,7 +741,7 @@ export default function Home() {
 		closeAssetWizard();
 	};
 
-	const handleAddAsset = (e: React.FormEvent) => {
+	const handleAddAsset = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (assetWizardRoomId && newAssetName.trim() && editingIndex !== null) {
 			const updatedRegisters = [...registers];
@@ -558,9 +751,10 @@ export default function Home() {
 			if (roomIndex !== -1) {
 				const price = parseFloat(newAssetPurchasePrice) || 0;
 				const isIncomplete = !newAssetPurchasePrice || price === 0 || !newAssetPurchaseDate;
+				const assetId = `asset-${Date.now()}`;
 				
-				updatedRegisters[editingIndex].rooms[roomIndex].assets.push({
-					id: Date.now().toString(),
+				const newAsset = {
+					id: assetId,
 					itemType: newAssetItemType.trim() || "",
 					name: newAssetName.trim(),
 					serialNumber: newAssetSerialNumber.trim() || "",
@@ -568,8 +762,27 @@ export default function Home() {
 					purchaseDate: newAssetPurchaseDate || "",
 					photo: newAssetPhoto || undefined,
 					incomplete: isIncomplete,
-				});
+				};
+				
+				updatedRegisters[editingIndex].rooms[roomIndex].assets.push(newAsset);
 				setRegisters(updatedRegisters);
+				
+				// Sync to API
+				try {
+					await api.createAsset({
+						assetGroupId: assetWizardRoomId,
+						id: assetId,
+						itemType: newAsset.itemType,
+						name: newAsset.name,
+						serialNumber: newAsset.serialNumber,
+						purchasePrice: newAsset.purchasePrice,
+						purchaseDate: newAsset.purchaseDate,
+						photo: newAsset.photo,
+						incomplete: newAsset.incomplete,
+					});
+				} catch (err) {
+					console.error("Failed to create asset:", err);
+				}
 			}
 			// Reset form but stay in wizard to add more items
 			setNewAssetItemType("");
@@ -594,7 +807,7 @@ export default function Home() {
 		}
 	};
 
-	const handleDeleteAsset = (roomId: string, assetId: string) => {
+	const handleDeleteAsset = async (roomId: string, assetId: string) => {
 		if (editingIndex !== null) {
 			const updatedRegisters = [...registers];
 			const roomIndex = updatedRegisters[editingIndex].rooms.findIndex((r) => r.id === roomId);
@@ -603,6 +816,13 @@ export default function Home() {
 					editingIndex
 				].rooms[roomIndex].assets.filter((a) => a.id !== assetId);
 				setRegisters(updatedRegisters);
+				
+				// Sync to API
+				try {
+					await api.deleteAsset(assetId);
+				} catch (err) {
+					console.error("Failed to delete asset:", err);
+				}
 			}
 		}
 	};
@@ -633,9 +853,10 @@ export default function Home() {
 		}
 	};
 
-	const handleOwnershipWizardContinue = () => {
+	const handleOwnershipWizardContinue = async () => {
 		if (editingIndex !== null && (ownsLand || ownsBuildings)) {
 			const updatedRegisters = [...registers];
+			const register = updatedRegisters[editingIndex];
 			updatedRegisters[editingIndex].ownsLand = ownsLand || false;
 			updatedRegisters[editingIndex].ownsBuildings = ownsBuildings || false;
 
@@ -645,6 +866,7 @@ export default function Home() {
 			if (!existingWholeSite) {
 				// Create a Whole Site entry
 				const wholeSiteAssets: Asset[] = [];
+				const wholeSiteRoomId = `whole-site-${Date.now()}`;
 				
 				if (ownsLand) {
 					wholeSiteAssets.push({
@@ -660,7 +882,7 @@ export default function Home() {
 				
 				if (ownsBuildings) {
 					wholeSiteAssets.push({
-						id: `buildings-${Date.now()}`,
+						id: `buildings-${Date.now() + 1}`,
 						itemType: "Property",
 						name: "Buildings",
 						serialNumber: "",
@@ -671,7 +893,7 @@ export default function Home() {
 				}
 
 				const wholeSiteRoom: Room = {
-					id: `whole-site-${Date.now()}`,
+					id: wholeSiteRoomId,
 					name: "Whole Site",
 					tool: "rectangle",
 					color: "#6366f1",
@@ -680,15 +902,47 @@ export default function Home() {
 				};
 
 				updatedRegisters[editingIndex].rooms.unshift(wholeSiteRoom);
+				
+				// Sync to API
+				if (register.id) {
+					try {
+						// Create the Whole Site asset group
+						await api.createAssetGroup({
+							registerId: register.id,
+							id: wholeSiteRoomId,
+							name: "Whole Site",
+							tool: "rectangle",
+							color: "#6366f1",
+							isWholeSite: true,
+						});
+						
+						// Create the assets
+						for (const asset of wholeSiteAssets) {
+							await api.createAsset({
+								assetGroupId: wholeSiteRoomId,
+								id: asset.id,
+								itemType: asset.itemType,
+								name: asset.name,
+								serialNumber: asset.serialNumber,
+								purchasePrice: asset.purchasePrice,
+								purchaseDate: asset.purchaseDate,
+								incomplete: asset.incomplete,
+							});
+						}
+					} catch (err) {
+						console.error("Failed to create whole site:", err);
+					}
+				}
 			} else {
 				// Update existing Whole Site entry
 				const wholeSiteIndex = updatedRegisters[editingIndex].rooms.findIndex(r => r.isWholeSite);
 				if (wholeSiteIndex !== -1) {
 					const existingAssets = updatedRegisters[editingIndex].rooms[wholeSiteIndex].assets;
+					const wholeSiteRoomId = updatedRegisters[editingIndex].rooms[wholeSiteIndex].id;
 					
 					// Add Land if selected and doesn't exist
 					if (ownsLand && !existingAssets.find(a => a.name === "Land")) {
-						existingAssets.push({
+						const landAsset = {
 							id: `land-${Date.now()}`,
 							itemType: "Property",
 							name: "Land",
@@ -696,12 +950,25 @@ export default function Home() {
 							purchasePrice: parseFloat(landValue) || 0,
 							purchaseDate: landPurchaseDate || "",
 							incomplete: !landValue || parseFloat(landValue) === 0 || !landPurchaseDate,
-						});
+						};
+						existingAssets.push(landAsset);
+						
+						// Sync to API
+						if (register.id) {
+							try {
+								await api.createAsset({
+									assetGroupId: wholeSiteRoomId,
+									...landAsset,
+								});
+							} catch (err) {
+								console.error("Failed to create land asset:", err);
+							}
+						}
 					}
 					
 					// Add Buildings if selected and doesn't exist
 					if (ownsBuildings && !existingAssets.find(a => a.name === "Buildings")) {
-						existingAssets.push({
+						const buildingsAsset = {
 							id: `buildings-${Date.now()}`,
 							itemType: "Property",
 							name: "Buildings",
@@ -709,32 +976,79 @@ export default function Home() {
 							purchasePrice: parseFloat(buildingsValue) || 0,
 							purchaseDate: buildingsPurchaseDate || "",
 							incomplete: !buildingsValue || parseFloat(buildingsValue) === 0 || !buildingsPurchaseDate,
-						});
+						};
+						existingAssets.push(buildingsAsset);
+						
+						// Sync to API
+						if (register.id) {
+							try {
+								await api.createAsset({
+									assetGroupId: wholeSiteRoomId,
+									...buildingsAsset,
+								});
+							} catch (err) {
+								console.error("Failed to create buildings asset:", err);
+							}
+						}
 					}
 				}
 			}
 
 			updatedRegisters[editingIndex].wizardCompleted = true;
 			setRegisters(updatedRegisters);
+			
+			// Update register in API
+			if (register.id) {
+				try {
+					await api.updateRegister({
+						id: register.id,
+						address: register.address,
+						sitePlan: register.sitePlan,
+						ownsLand: ownsLand || false,
+						ownsBuildings: ownsBuildings || false,
+						wizardCompleted: true,
+					});
+				} catch (err) {
+					console.error("Failed to update register:", err);
+				}
+			}
 		}
 
 		setShowOwnershipWizard(false);
 		setWizardActive(true);
 	};
 
-	const handleOwnershipWizardSkip = () => {
+	const handleOwnershipWizardSkip = async () => {
 		if (editingIndex !== null) {
 			const updatedRegisters = [...registers];
 			updatedRegisters[editingIndex].wizardCompleted = true;
 			setRegisters(updatedRegisters);
+			
+			// Sync to API
+			const register = updatedRegisters[editingIndex];
+			if (register.id) {
+				try {
+					await api.updateRegister({
+						id: register.id,
+						address: register.address,
+						sitePlan: register.sitePlan,
+						ownsLand: register.ownsLand,
+						ownsBuildings: register.ownsBuildings,
+						wizardCompleted: true,
+					});
+				} catch (err) {
+					console.error("Failed to update register:", err);
+				}
+			}
 		}
 		setShowOwnershipWizard(false);
 		setWizardActive(true);
 	};
 
-	const handleOwnershipValuesSkip = () => {
+	const handleOwnershipValuesSkip = async () => {
 		if (editingIndex !== null && (ownsLand || ownsBuildings)) {
 			const updatedRegisters = [...registers];
+			const register = updatedRegisters[editingIndex];
 			updatedRegisters[editingIndex].ownsLand = ownsLand || false;
 			updatedRegisters[editingIndex].ownsBuildings = ownsBuildings || false;
 
@@ -744,6 +1058,7 @@ export default function Home() {
 			if (!existingWholeSite) {
 				// Create a Whole Site entry with incomplete assets
 				const wholeSiteAssets: Asset[] = [];
+				const wholeSiteRoomId = `whole-site-${Date.now()}`;
 				
 				if (ownsLand) {
 					wholeSiteAssets.push({
@@ -759,7 +1074,7 @@ export default function Home() {
 				
 				if (ownsBuildings) {
 					wholeSiteAssets.push({
-						id: `buildings-${Date.now()}`,
+						id: `buildings-${Date.now() + 1}`,
 						itemType: "Property",
 						name: "Buildings",
 						serialNumber: "",
@@ -770,7 +1085,7 @@ export default function Home() {
 				}
 
 				const wholeSiteRoom: Room = {
-					id: `whole-site-${Date.now()}`,
+					id: wholeSiteRoomId,
 					name: "Whole Site",
 					tool: "rectangle",
 					color: "#6366f1",
@@ -779,10 +1094,55 @@ export default function Home() {
 				};
 
 				updatedRegisters[editingIndex].rooms.unshift(wholeSiteRoom);
+				
+				// Sync to API
+				if (register.id) {
+					try {
+						await api.createAssetGroup({
+							registerId: register.id,
+							id: wholeSiteRoomId,
+							name: "Whole Site",
+							tool: "rectangle",
+							color: "#6366f1",
+							isWholeSite: true,
+						});
+						
+						for (const asset of wholeSiteAssets) {
+							await api.createAsset({
+								assetGroupId: wholeSiteRoomId,
+								id: asset.id,
+								itemType: asset.itemType,
+								name: asset.name,
+								serialNumber: asset.serialNumber,
+								purchasePrice: asset.purchasePrice,
+								purchaseDate: asset.purchaseDate,
+								incomplete: asset.incomplete,
+							});
+						}
+					} catch (err) {
+						console.error("Failed to create whole site:", err);
+					}
+				}
 			}
 
 			updatedRegisters[editingIndex].wizardCompleted = true;
 			setRegisters(updatedRegisters);
+			
+			// Update register in API
+			if (register.id) {
+				try {
+					await api.updateRegister({
+						id: register.id,
+						address: register.address,
+						sitePlan: register.sitePlan,
+						ownsLand: ownsLand || false,
+						ownsBuildings: ownsBuildings || false,
+						wizardCompleted: true,
+					});
+				} catch (err) {
+					console.error("Failed to update register:", err);
+				}
+			}
 		}
 
 		setShowOwnershipWizard(false);
@@ -1842,7 +2202,11 @@ export default function Home() {
 				</button>
 			)}
 
-			{registers.length > 0 && (
+			{isLoading && (
+				<div className="text-gray-500">Loading registers...</div>
+			)}
+
+			{!isLoading && registers.length > 0 && (
 				<div className="w-full max-w-md">
 					<ul className="space-y-2">
 						{registers.map((register, index) => (

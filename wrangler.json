@@ -10,5 +10,12 @@
 	"upload_source_maps": true,
 	"vars": {
 		"VALUE_FROM_CLOUDFLARE": "Hello from Cloudflare"
-	}
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "asset-db",
+			"database_id": "0ebf34a9-bd05-4cd5-8421-77fc9cfb5a33"
+		}
+	]
 }
