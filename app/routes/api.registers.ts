@@ -33,14 +33,38 @@ export async function loader({ context }: Route.LoaderArgs) {
 						.bind(group.id)
 						.all();
 
+					const start = group.start_x !== null ? { x: group.start_x, y: group.start_y } : undefined;
+					const end = group.end_x !== null ? { x: group.end_x, y: group.end_y } : undefined;
+					const path = group.path ? JSON.parse(group.path) : undefined;
+
+					// Convert API format to Room format
+					let rect: { x: number; y: number; width: number; height: number } | undefined;
+					let circle: { cx: number; cy: number; radius: number } | undefined;
+
+					if (group.tool === "rectangle" && start && end) {
+						rect = {
+							x: start.x,
+							y: start.y,
+							width: end.x - start.x,
+							height: end.y - start.y,
+						};
+					} else if (group.tool === "circle" && start && end) {
+						const radius = Math.sqrt(Math.pow(end.x - start.x, 2) + Math.pow(end.y - start.y, 2));
+						circle = {
+							cx: start.x,
+							cy: start.y,
+							radius,
+						};
+					}
+
 					return {
 						id: group.id,
 						name: group.name,
 						tool: group.tool,
 						color: group.color,
-						start: group.start_x !== null ? { x: group.start_x, y: group.start_y } : undefined,
-						end: group.end_x !== null ? { x: group.end_x, y: group.end_y } : undefined,
-						path: group.path ? JSON.parse(group.path) : undefined,
+						rect,
+						circle,
+						path,
 						isWholeSite: Boolean(group.is_whole_site),
 						assets: assets.results.map((asset: any) => ({
 							id: asset.id,

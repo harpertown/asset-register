@@ -679,15 +679,30 @@ export default function Home() {
 			const register = updatedRegisters[editingIndex];
 			if (register.id) {
 				try {
+					// Convert room format to API format
+					let start: Point | undefined;
+					let end: Point | undefined;
+					let path: Point[] | undefined;
+
+					if (newRoom.tool === "rectangle" && newRoom.rect) {
+						start = { x: newRoom.rect.x, y: newRoom.rect.y };
+						end = { x: newRoom.rect.x + newRoom.rect.width, y: newRoom.rect.y + newRoom.rect.height };
+					} else if (newRoom.tool === "circle" && newRoom.circle) {
+						start = { x: newRoom.circle.cx, y: newRoom.circle.cy };
+						end = { x: newRoom.circle.cx + newRoom.circle.radius, y: newRoom.circle.cy };
+					} else if (newRoom.tool === "pen" && newRoom.path) {
+						path = newRoom.path;
+					}
+
 					await api.createAssetGroup({
 						registerId: register.id,
 						id: newRoom.id,
 						name: newRoom.name,
 						tool: newRoom.tool,
 						color: newRoom.color,
-						start: newRoom.start,
-						end: newRoom.end,
-						path: newRoom.path,
+						start,
+						end,
+						path,
 						isWholeSite: newRoom.isWholeSite,
 					});
 				} catch (err) {
