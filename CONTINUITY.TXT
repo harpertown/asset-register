@@ -1,0 +1,161 @@
+================================================================================
+                        ASSET REGISTER - CONTINUITY DOCUMENT
+================================================================================
+Last Updated: 2026-01-31
+Maintainer: [Your Name Here]
+
+================================================================================
+                              PROJECT OVERVIEW
+================================================================================
+
+This is an Asset Register application built on Cloudflare Workers with a React
+frontend. It provides a web interface for managing and tracking assets through
+a RESTful API.
+
+Tech Stack:
+- Backend: Cloudflare Workers (TypeScript)
+- Frontend: React with React Router
+- Build Tool: Vite
+- Database: SQLite (via Cloudflare D1)
+- Configuration: wrangler.json, tsconfig files
+
+================================================================================
+                           PROJECT STRUCTURE
+================================================================================
+
+/                           # Root directory
+├── .gitignore              # Git ignore rules
+├── package.json            # Node dependencies and scripts
+├── vite.config.ts          # Vite configuration
+├── wrangler.json           # Cloudflare Workers configuration
+├── tsconfig.json           # TypeScript config (root)
+├── tsconfig.node.json      # TypeScript config (Node tools)
+├── tsconfig.cloudflare.json# TypeScript config (Cloudflare)
+├── worker-configuration.d.ts # Worker type definitions
+├── README.md               # Project documentation
+├── CONTINUITY.TXT          # This file
+├── migrations/             # Database migrations
+│   └── 0001_initial_schema.sql
+├── app/                    # Application source
+│   ├── app.css             # Global styles
+│   ├── root.tsx            # App root component
+│   ├── entry.server.tsx    # Server entry point
+│   ├── routes.ts           # Route definitions
+│   ├── routes/             # Route handlers
+│   │   ├── home.tsx        # Home page route
+│   │   └── api.registers.ts # API route for registers
+│   └── welcome/            # Welcome page component
+│       ├── welcome.tsx
+│       ├── logo-dark.svg
+│       └── logo-light.svg
+└── workers/
+    └── app.ts              # Worker entry point
+
+================================================================================
+                           DATABASE SCHEMA
+================================================================================
+
+The database schema is defined in migrations/0001_initial_schema.sql.
+Please refer to that file for the complete schema documentation.
+
+Key tables (if applicable):
+- registers: Main table for asset registers
+- assets: Individual asset entries
+- [Add other tables as needed]
+
+To apply migrations:
+  npx wrangler d1 migrations apply <database_name>
+
+================================================================================
+                         DEVELOPMENT COMMANDS
+================================================================================
+
+Install dependencies:
+  npm install
+
+Start development server:
+  npm run dev
+
+Build for production:
+  npm run build
+
+Deploy to Cloudflare:
+  npx wrangler deploy
+
+Run type checking:
+  npm run check
+
+Preview deployment:
+  npm run preview
+
+================================================================================
+                       CLOUDFLARE CONFIGURATION
+================================================================================
+
+The application uses Cloudflare Workers and D1 database. Configuration is in
+wrangler.json. Key settings include:
+
+- Main worker: workers/app.ts
+- Database: D1 database for persistence
+- Assets: Static asset serving
+
+To set up a new environment:
+1. Update wrangler.json with your Cloudflare account details
+2. Create D1 database: npx wrangler d1 create asset-register
+3. Update wrangler.json with the database ID
+4. Apply migrations: npx wrangler d1 migrations apply asset-register
+5. Deploy: npx wrangler deploy
+
+================================================================================
+                          API DOCUMENTATION
+================================================================================
+
+The API routes are defined in app/routes/api.registers.ts. Key endpoints:
+
+GET  /api/registers      - List all registers
+POST /api/registers      - Create a new register
+GET  /api/registers/:id  - Get specific register
+PUT  /api/registers/:id  - Update register
+DELETE /api/registers/:id - Delete register
+
+Check app/routes/api.registers.ts for complete API documentation.
+
+================================================================================
+                          IMPORTANT NOTES
+================================================================================
+
+1. TypeScript Configuration:
+   - Cloudflare-specific types are in tsconfig.cloudflare.json
+   - Standard TypeScript rules are in tsconfig.json
+
+2. React Router:
+   - Routes are defined in app/routes.ts
+   - Uses file-based routing pattern
+
+3. Static Assets:
+   - Images and static files go in public/
+   - Build output is served from workers/
+
+4. Environment Variables:
+   - Check wrangler.json for required environment variables
+   - Use .dev.vars for local development secrets
+
+5. Database Migrations:
+   - All migrations must be placed in migrations/
+   - Filename format: 0001_description.sql
+   - Migrations are applied in filename order
+
+================================================================================
+                           KNOWN ISSUES / TODOS
+================================================================================
+
+[Add any known issues, limitations, or future work here]
+
+================================================================================
+                            EMERGENCY CONTACTS
+================================================================================
+
+Cloudflare Support: https://developers.cloudflare.com/support/
+Documentation: https://developers.cloudflare.com/workers/
+
+================================================================================
