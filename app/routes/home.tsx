@@ -853,6 +853,10 @@ export default function Home() {
 		setBuildingsPurchaseDate("");
 	};
 
+	const startAddRoom = () => {
+		setWizardActive(true);
+	};
+
 	const handleOwnershipQuestionsNext = () => {
 		if (ownsLand || ownsBuildings) {
 			setOwnershipWizardStep("values");
@@ -1329,13 +1333,34 @@ export default function Home() {
 					<div className="flex flex-col items-center gap-4 w-full max-w-5xl">
 						{/* Toolbar */}
 						<div className="flex flex-wrap items-center gap-2 mb-2">
-							{!wizardActive ? (
+							{!wizardActive && !register.wizardCompleted ? (
 								<>
 									<button
 										onClick={startAssetRegisterWizard}
 										className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
 									>
 										Start Asset Register Wizard
+									</button>
+									<button
+										onClick={handleExportCSV}
+										className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+									>
+										Export CSV
+									</button>
+									<button
+										onClick={handleRemoveSitePlan}
+										className="px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors"
+									>
+										Remove
+									</button>
+								</>
+							) : !wizardActive ? (
+								<>
+									<button
+										onClick={startAddRoom}
+										className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+									>
+										Add Room
 									</button>
 									<button
 										onClick={handleExportCSV}
