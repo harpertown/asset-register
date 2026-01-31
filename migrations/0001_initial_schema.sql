@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS asset_groups (
 CREATE TABLE IF NOT EXISTS assets (
     id TEXT PRIMARY KEY,
     asset_group_id TEXT NOT NULL,
+    asset_id TEXT,
     item_type TEXT,
     name TEXT NOT NULL,
     serial_number TEXT,

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useNavigate, useLocation, useSearchParams } from "react-router";
 import type { Route } from "./+types/home";
 
 // API helper functions
@@ -96,6 +97,26 @@ const api = {
 			body: JSON.stringify({ action: "delete_asset", id }),
 		});
 		if (!res.ok) throw new Error("Failed to delete asset");
+		return res.json();
+	},
+
+	async updateAsset(data: {
+		id: string;
+		assetId?: string;
+		itemType?: string;
+		name: string;
+		serialNumber?: string;
+		purchasePrice?: number;
+		purchaseDate?: string;
+		photo?: string;
+		incomplete?: boolean;
+	}): Promise<{ success: boolean }> {
+		const res = await fetch("/api/registers", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ action: "update_asset", ...data }),
+		});
+		if (!res.ok) throw new Error("Failed to update asset");
 		return res.json();
 	},
 };
@@ -247,6 +268,7 @@ interface Point {
 
 interface Asset {
 	id: string;
+	assetId?: string;
 	itemType: string;
 	name: string;
 	serialNumber: string;
@@ -287,9 +309,9 @@ type WizardStep = "question" | "addItem";
 type OwnershipWizardStep = "questions" | "values";
 
 export default function Home() {
-	const [password, setPassword] = useState("");
-	const [isAuthenticated, setIsAuthenticated] = useState(false);
-	const [error, setError] = useState(false);
+	const navigate = useNavigate();
+	const location = useLocation();
+	const [searchParams, setSearchParams] = useSearchParams();
 	const [isCreating, setIsCreating] = useState(false);
 	const [address, setAddress] = useState("");
 	const [registers, setRegisters] = useState<Register[]>([]);
@@ -326,11 +348,13 @@ export default function Home() {
 	const [itemTypeSuggestions, setItemTypeSuggestions] = useState<string[]>([]);
 	const [showItemTypeSuggestions, setShowItemTypeSuggestions] = useState(false);
 	const [newAssetName, setNewAssetName] = useState("");
+	const [newAssetId, setNewAssetId] = useState("");
 	const [newAssetSerialNumber, setNewAssetSerialNumber] = useState("");
 	const [newAssetPurchasePrice, setNewAssetPurchasePrice] = useState("");
 	const [newAssetPurchaseDate, setNewAssetPurchaseDate] = useState("");
 	const [newAssetPhoto, setNewAssetPhoto] = useState<string | null>(null);
-
+	const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
+ 
 	const inputRef = useRef<HTMLInputElement>(null);
 	const suggestionsRef = useRef<HTMLUListElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
@@ -352,10 +376,23 @@ export default function Home() {
 	}, []);
 
 	useEffect(() => {
-		if (isAuthenticated) {
-			loadRegisters();
+		loadRegisters();
+	}, [loadRegisters]);
+
+	useEffect(() => {
+		// Handle navigation to open a specific register for editing
+		if (registers.length > 0) {
+			const registerId = searchParams.get('register');
+			if (registerId) {
+				const index = registers.findIndex((r) => r.id === registerId);
+				if (index >= 0) {
+					setEditingIndex(index);
+				}
+				// Clear the search param to prevent re-triggering
+				setSearchParams(new URLSearchParams());
+			}
 		}
-	}, [isAuthenticated, loadRegisters]);
+	}, [registers, searchParams, setSearchParams]);
 
 	useEffect(() => {
 		const handleClickOutside = (event: MouseEvent) => {
@@ -419,16 +456,6 @@ export default function Home() {
 		setAddress(suggestion);
 		setShowSuggestions(false);
 		setSuggestions([]);
-	};
-
-	const handleSubmit = (e: React.FormEvent) => {
-		e.preventDefault();
-		if (password === "asset") {
-			setIsAuthenticated(true);
-			setError(false);
-		} else {
-			setError(true);
-		}
 	};
 
 	const handleCreateRegister = async (e: React.FormEvent) => {
@@ -746,6 +773,7 @@ export default function Home() {
 		setNewAssetPurchasePrice("");
 		setNewAssetPurchaseDate("");
 		setNewAssetPhoto(null);
+		setNewAssetId("");
 	};
 
 	const handleAssetWizardYes = () => {
@@ -766,37 +794,79 @@ export default function Home() {
 			if (roomIndex !== -1) {
 				const price = parseFloat(newAssetPurchasePrice) || 0;
 				const isIncomplete = !newAssetPurchasePrice || price === 0 || !newAssetPurchaseDate;
-				const assetId = `asset-${Date.now()}`;
 				
-				const newAsset = {
-					id: assetId,
-					itemType: newAssetItemType.trim() || "",
-					name: newAssetName.trim(),
-					serialNumber: newAssetSerialNumber.trim() || "",
-					purchasePrice: price,
-					purchaseDate: newAssetPurchaseDate || "",
-					photo: newAssetPhoto || undefined,
-					incomplete: isIncomplete,
-				};
-				
-				updatedRegisters[editingIndex].rooms[roomIndex].assets.push(newAsset);
-				setRegisters(updatedRegisters);
-				
-				// Sync to API
-				try {
-					await api.createAsset({
-						assetGroupId: assetWizardRoomId,
+				if (editingAssetId) {
+					// Update existing asset
+					const assetIndex = updatedRegisters[editingIndex].rooms[roomIndex].assets.findIndex(
+						(a) => a.id === editingAssetId
+					);
+					if (assetIndex !== -1) {
+						const updatedAsset = {
+							...updatedRegisters[editingIndex].rooms[roomIndex].assets[assetIndex],
+							assetId: newAssetId.trim() || undefined,
+							itemType: newAssetItemType.trim() || "",
+							name: newAssetName.trim(),
+							serialNumber: newAssetSerialNumber.trim() || "",
+							purchasePrice: price,
+							purchaseDate: newAssetPurchaseDate || "",
+							photo: newAssetPhoto || undefined,
+							incomplete: isIncomplete,
+						};
+						updatedRegisters[editingIndex].rooms[roomIndex].assets[assetIndex] = updatedAsset;
+						setRegisters(updatedRegisters);
+						
+						// Sync to API
+						try {
+							await api.updateAsset({
+								id: editingAssetId,
+								assetId: updatedAsset.assetId,
+								itemType: updatedAsset.itemType,
+								name: updatedAsset.name,
+								serialNumber: updatedAsset.serialNumber,
+								purchasePrice: updatedAsset.purchasePrice,
+								purchaseDate: updatedAsset.purchaseDate,
+								photo: updatedAsset.photo,
+								incomplete: updatedAsset.incomplete,
+							});
+						} catch (err) {
+							console.error("Failed to update asset:", err);
+						}
+					}
+				} else {
+					// Create new asset
+					const assetId = `asset-${Date.now()}`;
+					const newAsset = {
 						id: assetId,
-						itemType: newAsset.itemType,
-						name: newAsset.name,
-						serialNumber: newAsset.serialNumber,
-						purchasePrice: newAsset.purchasePrice,
-						purchaseDate: newAsset.purchaseDate,
-						photo: newAsset.photo,
-						incomplete: newAsset.incomplete,
-					});
-				} catch (err) {
-					console.error("Failed to create asset:", err);
+						assetId: newAssetId.trim() || undefined,
+						itemType: newAssetItemType.trim() || "",
+						name: newAssetName.trim(),
+						serialNumber: newAssetSerialNumber.trim() || "",
+						purchasePrice: price,
+						purchaseDate: newAssetPurchaseDate || "",
+						photo: newAssetPhoto || undefined,
+						incomplete: isIncomplete,
+					};
+					
+					updatedRegisters[editingIndex].rooms[roomIndex].assets.push(newAsset);
+					setRegisters(updatedRegisters);
+					
+					// Sync to API
+					try {
+						await api.createAsset({
+							assetGroupId: assetWizardRoomId,
+							id: assetId,
+							assetId: newAsset.assetId,
+							itemType: newAsset.itemType,
+							name: newAsset.name,
+							serialNumber: newAsset.serialNumber,
+							purchasePrice: newAsset.purchasePrice,
+							purchaseDate: newAsset.purchaseDate,
+							photo: newAsset.photo,
+							incomplete: newAsset.incomplete,
+						});
+					} catch (err) {
+						console.error("Failed to create asset:", err);
+					}
 				}
 			}
 			// Reset form but stay in wizard to add more items
@@ -804,10 +874,12 @@ export default function Home() {
 			setItemTypeSuggestions([]);
 			setShowItemTypeSuggestions(false);
 			setNewAssetName("");
+			setNewAssetId("");
 			setNewAssetSerialNumber("");
 			setNewAssetPurchasePrice("");
 			setNewAssetPurchaseDate("");
 			setNewAssetPhoto(null);
+			setEditingAssetId(null);
 		}
 	};
 
@@ -959,10 +1031,12 @@ export default function Home() {
 					const existingAssets = updatedRegisters[editingIndex].rooms[wholeSiteIndex].assets;
 					const wholeSiteRoomId = updatedRegisters[editingIndex].rooms[wholeSiteIndex].id;
 					
-					// Add Land if selected and doesn't exist
-					if (ownsLand && !existingAssets.find(a => a.name === "Land")) {
+					// Handle Land asset
+					const landAssetIndex = existingAssets.findIndex(a => a.name === "Land");
+					if (ownsLand) {
 						const landAsset = {
-							id: `land-${Date.now()}`,
+							id: landAssetIndex !== -1 ? existingAssets[landAssetIndex].id : `land-${Date.now()}`,
+							assetId: landAssetIndex !== -1 ? existingAssets[landAssetIndex].assetId : undefined,
 							itemType: "Property",
 							name: "Land",
 							serialNumber: "",
@@ -970,25 +1044,60 @@ export default function Home() {
 							purchaseDate: landPurchaseDate || "",
 							incomplete: !landValue || parseFloat(landValue) === 0 || !landPurchaseDate,
 						};
-						existingAssets.push(landAsset);
+						
+						if (landAssetIndex !== -1) {
+							// Update existing land asset
+							existingAssets[landAssetIndex] = landAsset;
+						} else {
+							// Add new land asset
+							existingAssets.push(landAsset);
+						}
 						
 						// Sync to API
 						if (register.id) {
 							try {
-								await api.createAsset({
-									assetGroupId: wholeSiteRoomId,
-									...landAsset,
-								});
+								if (landAssetIndex !== -1) {
+									await api.updateAsset({
+										id: landAsset.id,
+										assetId: landAsset.assetId,
+										itemType: landAsset.itemType,
+										name: landAsset.name,
+										serialNumber: landAsset.serialNumber,
+										purchasePrice: landAsset.purchasePrice,
+										purchaseDate: landAsset.purchaseDate,
+										incomplete: landAsset.incomplete,
+									});
+								} else {
+									await api.createAsset({
+										assetGroupId: wholeSiteRoomId,
+										...landAsset,
+									});
+								}
 							} catch (err) {
-								console.error("Failed to create land asset:", err);
+								console.error("Failed to save land asset:", err);
+							}
+						}
+					} else if (landAssetIndex !== -1) {
+						// Remove land asset if user no longer owns land
+						const landAssetId = existingAssets[landAssetIndex].id;
+						existingAssets.splice(landAssetIndex, 1);
+						
+						// Sync to API
+						if (register.id) {
+							try {
+								await api.deleteAsset(landAssetId);
+							} catch (err) {
+								console.error("Failed to delete land asset:", err);
 							}
 						}
 					}
 					
-					// Add Buildings if selected and doesn't exist
-					if (ownsBuildings && !existingAssets.find(a => a.name === "Buildings")) {
+					// Handle Buildings asset
+					const buildingsAssetIndex = existingAssets.findIndex(a => a.name === "Buildings");
+					if (ownsBuildings) {
 						const buildingsAsset = {
-							id: `buildings-${Date.now()}`,
+							id: buildingsAssetIndex !== -1 ? existingAssets[buildingsAssetIndex].id : `buildings-${Date.now()}`,
+							assetId: buildingsAssetIndex !== -1 ? existingAssets[buildingsAssetIndex].assetId : undefined,
 							itemType: "Property",
 							name: "Buildings",
 							serialNumber: "",
@@ -996,17 +1105,50 @@ export default function Home() {
 							purchaseDate: buildingsPurchaseDate || "",
 							incomplete: !buildingsValue || parseFloat(buildingsValue) === 0 || !buildingsPurchaseDate,
 						};
-						existingAssets.push(buildingsAsset);
+						
+						if (buildingsAssetIndex !== -1) {
+							// Update existing buildings asset
+							existingAssets[buildingsAssetIndex] = buildingsAsset;
+						} else {
+							// Add new buildings asset
+							existingAssets.push(buildingsAsset);
+						}
 						
 						// Sync to API
 						if (register.id) {
 							try {
-								await api.createAsset({
-									assetGroupId: wholeSiteRoomId,
-									...buildingsAsset,
-								});
+								if (buildingsAssetIndex !== -1) {
+									await api.updateAsset({
+										id: buildingsAsset.id,
+										assetId: buildingsAsset.assetId,
+										itemType: buildingsAsset.itemType,
+										name: buildingsAsset.name,
+										serialNumber: buildingsAsset.serialNumber,
+										purchasePrice: buildingsAsset.purchasePrice,
+										purchaseDate: buildingsAsset.purchaseDate,
+										incomplete: buildingsAsset.incomplete,
+									});
+								} else {
+									await api.createAsset({
+										assetGroupId: wholeSiteRoomId,
+										...buildingsAsset,
+									});
+								}
 							} catch (err) {
-								console.error("Failed to create buildings asset:", err);
+								console.error("Failed to save buildings asset:", err);
+							}
+						}
+					} else if (buildingsAssetIndex !== -1) {
+						// Remove buildings asset if user no longer owns buildings
+						const buildingsAssetId = existingAssets[buildingsAssetIndex].id;
+						existingAssets.splice(buildingsAssetIndex, 1);
+						
+						// Sync to API
+						if (register.id) {
+							try {
+								await api.deleteAsset(buildingsAssetId);
+							} catch (err) {
+								console.error("Failed to delete buildings asset:", err);
 							}
 						}
 					}
@@ -1292,31 +1434,6 @@ export default function Home() {
 		return null;
 	};
 
-	if (!isAuthenticated) {
-		return (
-			<div className="min-h-screen bg-white flex items-center justify-center">
-				<form onSubmit={handleSubmit} className="flex flex-col items-center gap-4">
-					<h1 className="text-2xl font-semibold text-gray-900 mb-2">Enter Password</h1>
-					<input
-						type="password"
-						value={password}
-						onChange={(e) => setPassword(e.target.value)}
-						placeholder="Password"
-						className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-gray-900"
-						autoFocus
-					/>
-					{error && <p className="text-red-500 text-sm">Incorrect password</p>}
-					<button
-						type="submit"
-						className="px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
-					>
-						Enter
-					</button>
-				</form>
-			</div>
-		);
-	}
-
 	// Editing view
 	if (editingIndex !== null) {
 		const register = registers[editingIndex];
@@ -1328,6 +1445,16 @@ export default function Home() {
 			<div className="min-h-screen bg-white flex flex-col items-center py-8 px-4">
 				<h1 className="text-2xl font-semibold text-gray-900">Edit Register</h1>
 				<p className="text-gray-600 mb-6">{register.address}</p>
+				{register.wizardCompleted && register.rooms.length > 0 && (
+					<div className="mb-4">
+						<button
+							onClick={() => navigate(`/transactions/${register.id}`)}
+							className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+						>
+							View All Assets
+						</button>
+					</div>
+				)}
 
 				{register.sitePlan ? (
 					<div className="flex flex-col items-center gap-4 w-full max-w-5xl">
@@ -1825,6 +1952,18 @@ export default function Home() {
 												</div>
 												<div>
 													<label className="block text-sm font-medium text-gray-700 mb-1">
+														Asset ID
+													</label>
+													<input
+														type="text"
+														value={newAssetId}
+														onChange={(e) => setNewAssetId(e.target.value)}
+														placeholder="e.g., ASSET-001, INV-123..."
+														className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-gray-900"
+													/>
+												</div>
+												<div>
+													<label className="block text-sm font-medium text-gray-700 mb-1">
 														Serial Number
 													</label>
 													<input
@@ -1907,10 +2046,28 @@ export default function Home() {
 															{wizardRoom.assets.map((asset) => (
 																<li
 																	key={asset.id}
-																	className="text-sm text-gray-600 flex justify-between"
+																	className="text-sm text-gray-600 flex justify-between items-center"
 																>
 																	<span>{asset.itemType}: {asset.name}</span>
-																	<span>{formatCurrency(asset.purchasePrice)}</span>
+																	<div className="flex items-center gap-2">
+																		<span>{formatCurrency(asset.purchasePrice)}</span>
+																		<button
+																			type="button"
+																			onClick={() => {
+																				setNewAssetItemType(asset.itemType || "");
+																				setNewAssetName(asset.name);
+																				setNewAssetId(asset.assetId || "");
+																				setNewAssetSerialNumber(asset.serialNumber || "");
+																				setNewAssetPurchasePrice(asset.purchasePrice ? asset.purchasePrice.toString() : "");
+																				setNewAssetPurchaseDate(asset.purchaseDate || "");
+																				setNewAssetPhoto(asset.photo || null);
+																				setEditingAssetId(asset.id);
+																			}}
+																			className="text-blue-500 hover:text-blue-700 text-xs"
+																		>
+																			Edit
+																		</button>
+																	</div>
 																</li>
 															))}
 														</ul>
@@ -2070,12 +2227,30 @@ export default function Home() {
 																	)}
 																</div>
 															</div>
-															<button
-																onClick={() => handleDeleteAsset(room.id, asset.id)}
-																className="text-red-500 hover:text-red-700 text-xs ml-2"
-															>
-																Remove
-															</button>
+															<div className="flex gap-2">
+																<button
+																	onClick={() => {
+																		setNewAssetItemType(asset.itemType || "");
+																		setNewAssetName(asset.name);
+																		setNewAssetId(asset.assetId || "");
+																		setNewAssetSerialNumber(asset.serialNumber || "");
+																		setNewAssetPurchasePrice(asset.purchasePrice ? asset.purchasePrice.toString() : "");
+																		setNewAssetPurchaseDate(asset.purchaseDate || "");
+																		setNewAssetPhoto(asset.photo || null);
+																		setEditingAssetId(asset.id);
+																		openAssetWizard(room.id);
+																	}}
+																	className="text-blue-500 hover:text-blue-700 text-xs"
+																>
+																	Edit
+																</button>
+																<button
+																	onClick={() => handleDeleteAsset(room.id, asset.id)}
+																	className="text-red-500 hover:text-red-700 text-xs"
+																>
+																	Remove
+																</button>
+															</div>
 														</li>
 													))}
 												</ul>

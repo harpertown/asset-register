@@ -68,6 +68,7 @@ export async function loader({ context }: Route.LoaderArgs) {
 						isWholeSite: Boolean(group.is_whole_site),
 						assets: assets.results.map((asset: any) => ({
 							id: asset.id,
+							assetId: asset.asset_id || "",
 							itemType: asset.item_type || "",
 							name: asset.name,
 							serialNumber: asset.serial_number || "",
@@ -219,12 +220,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 			const id = payload.id || `asset-${Date.now()}`;
 			await db
 				.prepare(
-					`INSERT INTO assets (id, asset_group_id, item_type, name, serial_number, purchase_price, purchase_date, photo, incomplete)
-					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+					`INSERT INTO assets (id, asset_group_id, asset_id, item_type, name, serial_number, purchase_price, purchase_date, photo, incomplete)
+					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 				)
 				.bind(
 					id,
 					payload.assetGroupId,
+					payload.assetId || null,
 					payload.itemType || null,
 					payload.name,
 					payload.serialNumber || null,
@@ -242,6 +244,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			await db
 				.prepare(
 					`UPDATE assets SET 
+						asset_id = ?,
 						item_type = ?, 
 						name = ?, 
 						serial_number = ?, 
@@ -253,6 +256,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 					WHERE id = ?`
 				)
 				.bind(
+					payload.assetId || null,
 					payload.itemType || null,
 					payload.name,
 					payload.serialNumber || null,
