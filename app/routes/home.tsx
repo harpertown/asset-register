@@ -73,6 +73,7 @@ const api = {
 	async createAsset(data: {
 		assetGroupId: string;
 		id?: string;
+		assetId?: string;
 		itemType?: string;
 		name: string;
 		serialNumber?: string;
@@ -330,6 +331,10 @@ export default function Home() {
 	const [roomName, setRoomName] = useState("");
 	const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
 	const [confirmDeleteRoomId, setConfirmDeleteRoomId] = useState<string | null>(null);
+	
+	// Expanded incomplete assets state
+	const [expandedIncompleteAssets, setExpandedIncompleteAssets] = useState<Set<string>>(new Set());
+	const [incompleteSectionExpanded, setIncompleteSectionExpanded] = useState(false);
 	
 	// Site ownership wizard state
 	const [showOwnershipWizard, setShowOwnershipWizard] = useState(false);
@@ -2013,9 +2018,12 @@ export default function Home() {
 															<button
 																type="button"
 																onClick={() => setNewAssetPhoto(null)}
-																className="text-red-500 hover:text-red-700 text-sm"
+																className="text-red-600 hover:text-red-800 p-1"
+																title="Remove photo"
 															>
-																Remove
+																<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																	<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+																</svg>
 															</button>
 														</div>
 													) : (
@@ -2085,8 +2093,12 @@ export default function Home() {
 													<button
 														type="submit"
 														disabled={!newAssetName.trim()}
-														className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+														className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+														title="Add asset"
 													>
+														<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+															<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+														</svg>
 														Add Item
 													</button>
 												</div>
@@ -2183,76 +2195,164 @@ export default function Home() {
 											{/* Assets list */}
 											{room.assets.length > 0 && (
 												<ul className="px-3 pb-2 space-y-1">
-													{room.assets.map((asset) => (
-														<li
-															key={asset.id}
-															className={`flex items-center justify-between py-1 px-2 rounded text-sm ${asset.incomplete ? 'bg-amber-50 border border-amber-200' : 'bg-white'}`}
-														>
-															<div className="flex-1 flex items-center gap-2">
-																{asset.photo && (
-																	<img
-																		src={asset.photo}
-																		alt={asset.name}
-																		className="w-8 h-8 object-cover rounded"
-																	/>
+													{room.assets.map((asset) => {
+														const isIncomplete = asset.incomplete;
+														const isExpanded = expandedIncompleteAssets.has(asset.id);
+
+														return (
+															<li
+																key={asset.id}
+																className={`py-1 px-2 rounded text-sm ${isIncomplete ? 'bg-amber-50 border border-amber-200' : 'bg-white'}`}
+															>
+																{isIncomplete ? (
+																	// Collapsed view for incomplete assets
+																	<div className="flex items-center justify-between">
+																		<div className="flex items-center gap-2">
+																			{asset.photo && (
+																				<img
+																					src={asset.photo}
+																					alt={asset.name}
+																					className="w-6 h-6 object-cover rounded"
+																				/>
+																			)}
+																			<span className="font-medium text-amber-700">
+																				{asset.itemType ? `${asset.itemType}: ` : ''}{asset.name}
+																			</span>
+																		</div>
+																		<div className="flex gap-2">
+																			<button
+																				onClick={() => {
+																					setExpandedIncompleteAssets(prev => {
+																						const newSet = new Set(prev);
+																						if (newSet.has(asset.id)) {
+																							newSet.delete(asset.id);
+																						} else {
+																							newSet.add(asset.id);
+																						}
+																						return newSet;
+																					});
+																				}}
+																				className="text-amber-600 hover:text-amber-800 p-1"
+																				title={isExpanded ? "Collapse" : "Expand"}
+																			>
+																				<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																					<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isExpanded ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"} />
+																				</svg>
+																			</button>
+																			<button
+																				onClick={(e) => {
+																					e.stopPropagation();
+																					handleDeleteAsset(room.id, asset.id);
+																				}}
+																				className="text-red-600 hover:text-red-800 p-1"
+																				title="Remove asset"
+																			>
+																				<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																					<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+																				</svg>
+																			</button>
+																		</div>
+																	</div>
+																) : (
+																	// Full view for complete assets
+																	<div
+																		onClick={() => {
+																			setNewAssetItemType(asset.itemType || "");
+																			setNewAssetName(asset.name);
+																			setNewAssetId(asset.assetId || "");
+																			setNewAssetSerialNumber(asset.serialNumber || "");
+																			setNewAssetPurchasePrice(asset.purchasePrice ? asset.purchasePrice.toString() : "");
+																			setNewAssetPurchaseDate(asset.purchaseDate || "");
+																			setNewAssetPhoto(asset.photo || null);
+																			setEditingAssetId(asset.id);
+																			openAssetWizard(room.id);
+																		}}
+																		className="flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
+																	>
+																		<div className="flex-1 flex items-center gap-2">
+																			{asset.photo && (
+																				<img
+																					src={asset.photo}
+																					alt={asset.name}
+																					className="w-8 h-8 object-cover rounded"
+																				/>
+																			)}
+																			<div>
+																				<span className="font-medium text-gray-800">
+																					{asset.itemType ? `${asset.itemType}: ` : ''}{asset.name}
+																				</span>
+																				{asset.serialNumber && (
+																					<span className="text-gray-400 ml-2 text-xs">
+																						(SN: {asset.serialNumber})
+																					</span>
+																				)}
+																				{asset.purchasePrice > 0 && (
+																					<span className="text-gray-500 ml-2">
+																						{formatCurrency(asset.purchasePrice)}
+																					</span>
+																				)}
+																				{asset.purchaseDate && (
+																					<span className="text-gray-400 ml-2 text-xs">
+																						({asset.purchaseDate})
+																					</span>
+																				)}
+																			</div>
+																		</div>
+																		<div className="flex gap-2">
+																			<button
+																				onClick={(e) => {
+																					e.stopPropagation();
+																					handleDeleteAsset(room.id, asset.id);
+																				}}
+																				className="text-red-600 hover:text-red-800 p-1"
+																				title="Remove asset"
+																			>
+																				<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																					<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+																				</svg>
+																			</button>
+																		</div>
+																	</div>
 																)}
-																<div>
-																	<span className={`font-medium ${asset.incomplete ? 'text-amber-700' : 'text-gray-800'}`}>
-																		{asset.itemType ? `${asset.itemType}: ` : ''}{asset.name}
-																	</span>
-																	{asset.incomplete && (!asset.purchasePrice || asset.purchasePrice === 0) && (
-																		<span className="text-xs bg-amber-200 text-amber-700 px-2 py-0.5 rounded ml-2">
-																			Needs value
-																		</span>
-																	)}
-																	{asset.incomplete && !asset.purchaseDate && (
-																		<span className="text-xs bg-amber-200 text-amber-700 px-2 py-0.5 rounded ml-2">
-																			Needs date
-																		</span>
-																	)}
-																	{asset.serialNumber && (
-																		<span className="text-gray-400 ml-2 text-xs">
-																			(SN: {asset.serialNumber})
-																		</span>
-																	)}
-																	{asset.purchasePrice > 0 && (
-																		<span className="text-gray-500 ml-2">
-																			{formatCurrency(asset.purchasePrice)}
-																		</span>
-																	)}
-																	{asset.purchaseDate && (
-																		<span className="text-gray-400 ml-2 text-xs">
-																			({asset.purchaseDate})
-																		</span>
-																	)}
-																</div>
-															</div>
-															<div className="flex gap-2">
-																<button
-																	onClick={() => {
-																		setNewAssetItemType(asset.itemType || "");
-																		setNewAssetName(asset.name);
-																		setNewAssetId(asset.assetId || "");
-																		setNewAssetSerialNumber(asset.serialNumber || "");
-																		setNewAssetPurchasePrice(asset.purchasePrice ? asset.purchasePrice.toString() : "");
-																		setNewAssetPurchaseDate(asset.purchaseDate || "");
-																		setNewAssetPhoto(asset.photo || null);
-																		setEditingAssetId(asset.id);
-																		openAssetWizard(room.id);
-																	}}
-																	className="text-blue-500 hover:text-blue-700 text-xs"
-																>
-																	Edit
-																</button>
-																<button
-																	onClick={() => handleDeleteAsset(room.id, asset.id)}
-																	className="text-red-500 hover:text-red-700 text-xs"
-																>
-																	Remove
-																</button>
-															</div>
-														</li>
-													))}
+																{/* Expanded details for incomplete assets */}
+																{isIncomplete && isExpanded && (
+																	<div className="mt-2 pt-2 border-t border-amber-200">
+																		<div className="flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors px-2 py-1 rounded"
+																			onClick={() => {
+																				setNewAssetItemType(asset.itemType || "");
+																				setNewAssetName(asset.name);
+																				setNewAssetId(asset.assetId || "");
+																				setNewAssetSerialNumber(asset.serialNumber || "");
+																				setNewAssetPurchasePrice(asset.purchasePrice ? asset.purchasePrice.toString() : "");
+																				setNewAssetPurchaseDate(asset.purchaseDate || "");
+																				setNewAssetPhoto(asset.photo || null);
+																				setEditingAssetId(asset.id);
+																				openAssetWizard(room.id);
+																			}}
+																		>
+																			<div className="flex-1">
+																				{asset.serialNumber && (
+																					<span className="text-gray-400 text-xs">
+																						Serial: {asset.serialNumber}
+																					</span>
+																				)}
+																				{asset.purchasePrice > 0 && (
+																					<span className="text-gray-500 ml-2">
+																						Value: {formatCurrency(asset.purchasePrice)}
+																					</span>
+																				)}
+																				{asset.purchaseDate && (
+																					<span className="text-gray-400 ml-2 text-xs">
+																						Date: {asset.purchaseDate}
+																					</span>
+																				)}
+																			</div>
+																		</div>
+																	</div>
+																)}
+															</li>
+														);
+													})}
 												</ul>
 											)}
 										</li>
@@ -2264,44 +2364,46 @@ export default function Home() {
 						{/* Incomplete Items Section */}
 						{register.wizardCompleted && register.rooms.some(room => room.assets.some(asset => asset.incomplete)) && (
 							<div className="w-full max-w-lg mt-4">
-								<h3 className="text-sm font-medium text-amber-700 mb-2 flex items-center gap-2">
-									<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+								<div
+									className="flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors p-2 rounded-lg border border-amber-200 bg-amber-50"
+									onClick={() => setIncompleteSectionExpanded(!incompleteSectionExpanded)}
+								>
+									<div className="flex items-center gap-2">
+										<svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+										</svg>
+										<h3 className="text-sm font-medium text-amber-700">
+											Incomplete Items ({register.rooms.reduce((count, room) => count + room.assets.filter(asset => asset.incomplete).length, 0)})
+										</h3>
+									</div>
+									<svg className={`w-4 h-4 text-amber-600 transition-transform ${incompleteSectionExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
 									</svg>
-									Incomplete Items
-								</h3>
-								<ul className="space-y-2">
-									{register.rooms.flatMap(room => 
-										room.assets
-											.filter(asset => asset.incomplete)
-											.map(asset => (
-												<li
-													key={asset.id}
-													className="flex items-center justify-between px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg"
-												>
-													<div className="flex items-center gap-2 flex-wrap">
-														<span className="text-amber-600 font-medium">{asset.name}</span>
-														{(!asset.purchasePrice || asset.purchasePrice === 0) && (
-															<span className="text-xs bg-amber-200 text-amber-700 px-2 py-0.5 rounded">
-																Needs value
-															</span>
-														)}
-														{!asset.purchaseDate && (
-															<span className="text-xs bg-amber-200 text-amber-700 px-2 py-0.5 rounded">
-																Needs date
-															</span>
-														)}
-													</div>
-													<button
-														onClick={() => openAssetWizard(room.id)}
-														className="px-3 py-1 text-sm bg-amber-600 text-white rounded hover:bg-amber-700 transition-colors"
+								</div>
+								{incompleteSectionExpanded && (
+									<ul className="space-y-2 mt-2">
+										{register.rooms.flatMap(room => 
+											room.assets
+												.filter(asset => asset.incomplete)
+												.map(asset => (
+													<li
+														key={asset.id}
+														className="flex items-center justify-between px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg"
 													>
-														Complete
-													</button>
-												</li>
-											))
-									)}
-								</ul>
+														<div className="flex items-center gap-2 flex-wrap">
+															<span className="text-amber-600 font-medium">{asset.name}</span>
+														</div>
+														<button
+															onClick={() => openAssetWizard(room.id)}
+															className="px-3 py-1 text-sm bg-amber-600 text-white rounded hover:bg-amber-700 transition-colors"
+														>
+															Complete
+														</button>
+													</li>
+												))
+										)}
+									</ul>
+								)}
 							</div>
 						)}
 					</div>
