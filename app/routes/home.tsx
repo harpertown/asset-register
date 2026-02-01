@@ -1,126 +1,20 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router";
 import type { Route } from "./+types/home";
-
-// API helper functions
-const api = {
-	async getRegisters(): Promise<Register[]> {
-		const res = await fetch("/api/registers");
-		if (!res.ok) throw new Error("Failed to fetch registers");
-		return res.json();
-	},
-
-	async createRegister(data: Partial<Register>): Promise<{ id: string; success: boolean }> {
-		const res = await fetch("/api/registers", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ action: "create_register", ...data }),
-		});
-		if (!res.ok) throw new Error("Failed to create register");
-		return res.json();
-	},
-
-	async updateRegister(data: Partial<Register> & { id: string }): Promise<{ success: boolean }> {
-		const res = await fetch("/api/registers", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ action: "update_register", ...data }),
-		});
-		if (!res.ok) throw new Error("Failed to update register");
-		return res.json();
-	},
-
-	async deleteRegister(id: string): Promise<{ success: boolean }> {
-		const res = await fetch("/api/registers", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ action: "delete_register", id }),
-		});
-		if (!res.ok) throw new Error("Failed to delete register");
-		return res.json();
-	},
-
-	async createAssetGroup(data: {
-		registerId: string;
-		id?: string;
-		name: string;
-		tool?: string;
-		color?: string;
-		start?: Point;
-		end?: Point;
-		path?: Point[];
-		isWholeSite?: boolean;
-	}): Promise<{ id: string; success: boolean }> {
-		const res = await fetch("/api/registers", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ action: "create_asset_group", ...data }),
-		});
-		if (!res.ok) throw new Error("Failed to create asset group");
-		return res.json();
-	},
-
-	async deleteAssetGroup(id: string): Promise<{ success: boolean }> {
-		const res = await fetch("/api/registers", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ action: "delete_asset_group", id }),
-		});
-		if (!res.ok) throw new Error("Failed to delete asset group");
-		return res.json();
-	},
-
-	async createAsset(data: {
-		assetGroupId: string;
-		id?: string;
-		assetId?: string;
-		itemType?: string;
-		name: string;
-		serialNumber?: string;
-		purchasePrice?: number;
-		purchaseDate?: string;
-		photo?: string;
-		incomplete?: boolean;
-	}): Promise<{ id: string; success: boolean }> {
-		const res = await fetch("/api/registers", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ action: "create_asset", ...data }),
-		});
-		if (!res.ok) throw new Error("Failed to create asset");
-		return res.json();
-	},
-
-	async deleteAsset(id: string): Promise<{ success: boolean }> {
-		const res = await fetch("/api/registers", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ action: "delete_asset", id }),
-		});
-		if (!res.ok) throw new Error("Failed to delete asset");
-		return res.json();
-	},
-
-	async updateAsset(data: {
-		id: string;
-		assetId?: string;
-		itemType?: string;
-		name: string;
-		serialNumber?: string;
-		purchasePrice?: number;
-		purchaseDate?: string;
-		photo?: string;
-		incomplete?: boolean;
-	}): Promise<{ success: boolean }> {
-		const res = await fetch("/api/registers", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ action: "update_asset", ...data }),
-		});
-		if (!res.ok) throw new Error("Failed to update asset");
-		return res.json();
-	},
-};
+import { apiService } from "~/services/api";
+import type { Register, Room, Asset, Point, Tool, WizardStep, OwnershipWizardStep } from "~/types";
+import AddressInput from "~/components/AddressInput";
+import SitePlanCanvas from "~/components/SitePlanCanvas";
+import DrawingToolbar from "~/components/DrawingToolbar";
+import AssetWizardModal from "~/components/AssetWizardModal";
+import OwnershipWizardModal from "~/components/OwnershipWizardModal";
+import ImportWizardModal from "~/components/ImportWizardModal";
+import RoomNamingModal from "~/components/RoomNamingModal";
+import ConfirmDeleteModal from "~/components/ConfirmDeleteModal";
+import DepreciationModal from "~/components/DepreciationModal";
+import AssetList from "~/components/AssetList";
+import IncompleteItemsSection from "~/components/IncompleteItemsSection";
+import ImportAssetForm from "~/components/ImportAssetForm";
 
 export function meta({}: Route.MetaArgs) {
 	return [
@@ -260,54 +154,7 @@ const IRD_ASSET_TYPES = [
 	"Other - specify",
 ];
 
-type Tool = "rectangle" | "circle" | "pen";
-
-interface Point {
-	x: number;
-	y: number;
-}
-
-interface Asset {
-	id: string;
-	assetId?: string;
-	itemType: string;
-	name: string;
-	serialNumber: string;
-	purchasePrice: number;
-	purchaseDate: string;
-	photo?: string;
-	incomplete?: boolean;
-}
-
-interface Room {
-	id: string;
-	name: string;
-	tool: Tool;
-	color: string;
-	assets: Asset[];
-	isWholeSite?: boolean;
-	// For rectangle
-	rect?: { x: number; y: number; width: number; height: number };
-	// For circle
-	circle?: { cx: number; cy: number; radius: number };
-	// For freeform pen
-	path?: Point[];
-}
-
-interface Register {
-	id?: string;
-	address: string;
-	sitePlan: string | null;
-	rooms: Room[];
-	ownsLand?: boolean;
-	ownsBuildings?: boolean;
-	wizardCompleted?: boolean;
-}
-
 const COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#8b5cf6", "#ec4899"];
-
-type WizardStep = "question" | "addItem";
-type OwnershipWizardStep = "questions" | "values";
 
 export default function Home() {
 	const navigate = useNavigate();
@@ -317,25 +164,25 @@ export default function Home() {
 	const [address, setAddress] = useState("");
 	const [registers, setRegisters] = useState<Register[]>([]);
 	const [isLoading, setIsLoading] = useState(false);
-	const [suggestions, setSuggestions] = useState<string[]>([]);
-	const [showSuggestions, setShowSuggestions] = useState(false);
 	const [editingIndex, setEditingIndex] = useState<number | null>(null);
 	const [wizardActive, setWizardActive] = useState(false);
 	const [selectedTool, setSelectedTool] = useState<Tool>("rectangle");
 	const [selectedColor, setSelectedColor] = useState(COLORS[0]);
-	const [isDrawing, setIsDrawing] = useState(false);
-	const [startPoint, setStartPoint] = useState<Point | null>(null);
-	const [currentPath, setCurrentPath] = useState<Point[]>([]);
 	const [previewShape, setPreviewShape] = useState<Room | null>(null);
 	const [namingRoom, setNamingRoom] = useState<Room | null>(null);
 	const [roomName, setRoomName] = useState("");
 	const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
 	const [confirmDeleteRoomId, setConfirmDeleteRoomId] = useState<string | null>(null);
-	
-	// Expanded incomplete assets state
-	const [expandedIncompleteAssets, setExpandedIncompleteAssets] = useState<Set<string>>(new Set());
+
+	// Incomplete section state
 	const [incompleteSectionExpanded, setIncompleteSectionExpanded] = useState(false);
-	
+
+	// CSV Import state
+	const [showImportWizard, setShowImportWizard] = useState(false);
+	const [importedAssets, setImportedAssets] = useState<any[]>([]);
+	const [currentImportIndex, setCurrentImportIndex] = useState(0);
+	const importFileInputRef = useRef<HTMLInputElement>(null);
+
 	// Site ownership wizard state
 	const [showOwnershipWizard, setShowOwnershipWizard] = useState(false);
 	const [ownershipWizardStep, setOwnershipWizardStep] = useState<OwnershipWizardStep>("questions");
@@ -345,7 +192,7 @@ export default function Home() {
 	const [landPurchaseDate, setLandPurchaseDate] = useState("");
 	const [buildingsValue, setBuildingsValue] = useState("");
 	const [buildingsPurchaseDate, setBuildingsPurchaseDate] = useState("");
-	
+
 	// Asset wizard state
 	const [assetWizardRoomId, setAssetWizardRoomId] = useState<string | null>(null);
 	const [assetWizardStep, setAssetWizardStep] = useState<WizardStep>("question");
@@ -359,7 +206,17 @@ export default function Home() {
 	const [newAssetPurchaseDate, setNewAssetPurchaseDate] = useState("");
 	const [newAssetPhoto, setNewAssetPhoto] = useState<string | null>(null);
 	const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
- 
+
+	// Depreciation calculation state
+	const [showDepreciationModal, setShowDepreciationModal] = useState(false);
+	const [depreciationResults, setDepreciationResults] = useState<any[]>([]);
+	const [financialYear, setFinancialYear] = useState(new Date().getFullYear().toString());
+	const [suggestions, setSuggestions] = useState<string[]>([]);
+	const [showSuggestions, setShowSuggestions] = useState(false);
+	const [isDrawing, setIsDrawing] = useState(false);
+	const [startPoint, setStartPoint] = useState<Point | null>(null);
+	const [currentPath, setCurrentPath] = useState<Point[]>([]);
+
 	const inputRef = useRef<HTMLInputElement>(null);
 	const suggestionsRef = useRef<HTMLUListElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
@@ -371,7 +228,7 @@ export default function Home() {
 	const loadRegisters = useCallback(async () => {
 		try {
 			setIsLoading(true);
-			const data = await api.getRegisters();
+			const data = await apiService.getRegisters();
 			setRegisters(data);
 		} catch (err) {
 			console.error("Failed to load registers:", err);
@@ -422,189 +279,6 @@ export default function Home() {
 		document.addEventListener("mousedown", handleClickOutside);
 		return () => document.removeEventListener("mousedown", handleClickOutside);
 	}, []);
-
-	const handleAddressChange = (value: string) => {
-		setAddress(value);
-		if (value.length >= 2) {
-			const filtered = mockAddresses.filter((addr) =>
-				addr.toLowerCase().includes(value.toLowerCase())
-			);
-			setSuggestions(filtered);
-			setShowSuggestions(filtered.length > 0);
-		} else {
-			setSuggestions([]);
-			setShowSuggestions(false);
-		}
-	};
-
-	const handleItemTypeChange = (value: string) => {
-		setNewAssetItemType(value);
-		if (value.length >= 1) {
-			const filtered = IRD_ASSET_TYPES.filter((type) =>
-				type.toLowerCase().includes(value.toLowerCase())
-			);
-			setItemTypeSuggestions(filtered);
-			setShowItemTypeSuggestions(filtered.length > 0);
-		} else {
-			setItemTypeSuggestions([]);
-			setShowItemTypeSuggestions(false);
-		}
-	};
-
-	const handleSelectItemType = (type: string) => {
-		setNewAssetItemType(type);
-		setShowItemTypeSuggestions(false);
-		setItemTypeSuggestions([]);
-	};
-
-	const handleSelectSuggestion = (suggestion: string) => {
-		setAddress(suggestion);
-		setShowSuggestions(false);
-		setSuggestions([]);
-	};
-
-	const handleCreateRegister = async (e: React.FormEvent) => {
-		e.preventDefault();
-		if (address.trim()) {
-			try {
-				const result = await api.createRegister({ address: address.trim() });
-				setRegisters([...registers, { 
-					id: result.id, 
-					address: address.trim(), 
-					sitePlan: null, 
-					rooms: [] 
-				}]);
-				setAddress("");
-				setIsCreating(false);
-				setSuggestions([]);
-				setShowSuggestions(false);
-			} catch (err) {
-				console.error("Failed to create register:", err);
-			}
-		}
-	};
-
-	const handleEdit = (index: number) => {
-		setEditingIndex(index);
-		setWizardActive(false);
-		setSelectedRoomId(null);
-		closeAssetWizard();
-	};
-
-	const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const file = e.target.files?.[0];
-		if (file && editingIndex !== null) {
-			const reader = new FileReader();
-			reader.onloadend = async () => {
-				const sitePlan = reader.result as string;
-				const updatedRegisters = [...registers];
-				updatedRegisters[editingIndex].sitePlan = sitePlan;
-				setRegisters(updatedRegisters);
-				
-				// Sync to API
-				const register = updatedRegisters[editingIndex];
-				if (register.id) {
-					try {
-						await api.updateRegister({
-							id: register.id,
-							address: register.address,
-							sitePlan,
-							ownsLand: register.ownsLand,
-							ownsBuildings: register.ownsBuildings,
-							wizardCompleted: register.wizardCompleted,
-						});
-					} catch (err) {
-						console.error("Failed to update register:", err);
-					}
-				}
-			};
-			reader.readAsDataURL(file);
-		}
-	};
-
-	const handleRemoveSitePlan = async () => {
-		if (editingIndex !== null) {
-			const updatedRegisters = [...registers];
-			updatedRegisters[editingIndex].sitePlan = null;
-			updatedRegisters[editingIndex].rooms = [];
-			setRegisters(updatedRegisters);
-			setWizardActive(false);
-			
-			// Sync to API
-			const register = updatedRegisters[editingIndex];
-			if (register.id) {
-				try {
-					await api.updateRegister({
-						id: register.id,
-						address: register.address,
-						sitePlan: null,
-						ownsLand: register.ownsLand,
-						ownsBuildings: register.ownsBuildings,
-						wizardCompleted: register.wizardCompleted,
-					});
-				} catch (err) {
-					console.error("Failed to update register:", err);
-				}
-			}
-		}
-	};
-
-	const handleExportCSV = () => {
-		if (editingIndex === null) return;
-		
-		const register = registers[editingIndex];
-		const rows: string[][] = [];
-		
-		// Header row
-		rows.push([
-			"Asset Group",
-			"Asset Name",
-			"Item Type",
-			"Serial Number",
-			"Purchase Price (NZD)",
-			"Purchase Date",
-			"Status"
-		]);
-		
-		// Data rows
-		register.rooms.forEach(room => {
-			room.assets.forEach(asset => {
-				rows.push([
-					room.name,
-					asset.name,
-					asset.itemType || "",
-					asset.serialNumber || "",
-					asset.purchasePrice > 0 ? asset.purchasePrice.toFixed(2) : "",
-					asset.purchaseDate || "",
-					asset.incomplete ? "Incomplete" : "Complete"
-				]);
-			});
-		});
-		
-		// Convert to CSV string
-		const csvContent = rows
-			.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(","))
-			.join("\n");
-		
-		// Create and download file
-		const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-		const link = document.createElement("a");
-		const url = URL.createObjectURL(blob);
-		
-		// Create filename from address (sanitize for file system)
-		const sanitizedAddress = register.address
-			.replace(/[^a-zA-Z0-9\s-]/g, "")
-			.replace(/\s+/g, "_")
-			.substring(0, 100);
-		const filename = `${sanitizedAddress}_asset_register.csv`;
-		
-		link.setAttribute("href", url);
-		link.setAttribute("download", filename);
-		link.style.visibility = "hidden";
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
-	};
 
 	const getRelativePosition = (e: React.MouseEvent): Point => {
 		if (!canvasRef.current) return { x: 0, y: 0 };
@@ -694,6 +368,436 @@ export default function Home() {
 		setPreviewShape(null);
 	};
 
+	const handleAddressChange = (value: string) => {
+		setAddress(value);
+		if (value.length >= 2) {
+			const filtered = mockAddresses.filter((addr) =>
+				addr.toLowerCase().includes(value.toLowerCase())
+			);
+			setSuggestions(filtered);
+			setShowSuggestions(filtered.length > 0);
+		} else {
+			setSuggestions([]);
+			setShowSuggestions(false);
+		}
+	};
+
+	const handleItemTypeChange = (value: string) => {
+		setNewAssetItemType(value);
+		if (value.length >= 1) {
+			const filtered = IRD_ASSET_TYPES.filter((type) =>
+				type.toLowerCase().includes(value.toLowerCase())
+			);
+			setItemTypeSuggestions(filtered);
+			setShowItemTypeSuggestions(filtered.length > 0);
+		} else {
+			setItemTypeSuggestions([]);
+			setShowItemTypeSuggestions(false);
+		}
+	};
+
+	const handleSelectItemType = (type: string) => {
+		setNewAssetItemType(type);
+		setShowItemTypeSuggestions(false);
+		setItemTypeSuggestions([]);
+	};
+
+	const handleSelectSuggestion = (suggestion: string) => {
+		setAddress(suggestion);
+		setShowSuggestions(false);
+		setSuggestions([]);
+	};
+
+	const handleCreateRegister = async (e: React.FormEvent) => {
+		e.preventDefault();
+		if (address.trim()) {
+			try {
+				const result = await apiService.createRegister({ address: address.trim() });
+				setRegisters([...registers, {
+					id: result.id,
+					address: address.trim(),
+					sitePlan: null,
+					rooms: []
+				}]);
+				setAddress("");
+				setIsCreating(false);
+			} catch (err) {
+				console.error("Failed to create register:", err);
+			}
+		}
+	};
+
+	const handleEdit = (index: number) => {
+		setEditingIndex(index);
+		setWizardActive(false);
+		setSelectedRoomId(null);
+		closeAssetWizard();
+	};
+
+	const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0];
+		if (file && editingIndex !== null) {
+			const reader = new FileReader();
+			reader.onloadend = async () => {
+				const sitePlan = reader.result as string;
+				const updatedRegisters = [...registers];
+				updatedRegisters[editingIndex].sitePlan = sitePlan;
+				setRegisters(updatedRegisters);
+
+				// Sync to API
+				const register = updatedRegisters[editingIndex];
+				if (register.id) {
+					try {
+						await apiService.updateRegister({
+							id: register.id,
+							address: register.address,
+							sitePlan,
+							ownsLand: register.ownsLand,
+							ownsBuildings: register.ownsBuildings,
+							wizardCompleted: register.wizardCompleted,
+						});
+					} catch (err) {
+						console.error("Failed to update register:", err);
+					}
+				}
+			};
+			reader.readAsDataURL(file);
+		}
+	};
+
+	const handleRemoveSitePlan = async () => {
+		if (editingIndex !== null) {
+			const updatedRegisters = [...registers];
+			updatedRegisters[editingIndex].sitePlan = null;
+			updatedRegisters[editingIndex].rooms = [];
+			setRegisters(updatedRegisters);
+			setWizardActive(false);
+
+			// Sync to API
+			const register = updatedRegisters[editingIndex];
+			if (register.id) {
+				try {
+					await apiService.updateRegister({
+						id: register.id,
+						address: register.address,
+						sitePlan: null,
+						ownsLand: register.ownsLand,
+						ownsBuildings: register.ownsBuildings,
+						wizardCompleted: register.wizardCompleted,
+					});
+				} catch (err) {
+					console.error("Failed to update register:", err);
+				}
+			}
+		}
+	};
+
+	const handleExportCSV = () => {
+		if (editingIndex === null) return;
+
+		const register = registers[editingIndex];
+		const rows: string[][] = [];
+
+		// Header row
+		rows.push([
+			"Asset Group",
+			"Asset Name",
+			"Item Type",
+			"Serial Number",
+			"Purchase Price (NZD)",
+			"Purchase Date",
+			"Status"
+		]);
+
+		// Data rows
+		register.rooms.forEach(room => {
+			room.assets.forEach(asset => {
+				rows.push([
+					room.name,
+					asset.name,
+					asset.itemType || "",
+					asset.serialNumber || "",
+					asset.purchasePrice > 0 ? asset.purchasePrice.toFixed(2) : "",
+					asset.purchaseDate || "",
+					asset.incomplete ? "Incomplete" : "Complete"
+				]);
+			});
+		});
+
+		// Convert to CSV string
+		const csvContent = rows
+			.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(","))
+			.join("\n");
+
+		// Create and download file
+		const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+		const link = document.createElement("a");
+		const url = URL.createObjectURL(blob);
+
+		// Create filename from address (sanitize for file system)
+		const sanitizedAddress = register.address
+			.replace(/[^a-zA-Z0-9\s-]/g, "")
+			.replace(/\s+/g, "_")
+			.substring(0, 100);
+		const filename = `${sanitizedAddress}_asset_register.csv`;
+
+		link.setAttribute("href", url);
+		link.setAttribute("download", filename);
+		link.style.visibility = "hidden";
+		document.body.appendChild(link);
+		link.click();
+		document.body.removeChild(link);
+	};
+
+	const handleCSVImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0];
+		if (!file || editingIndex === null) return;
+
+		const reader = new FileReader();
+		reader.onload = (event) => {
+			const text = event.target?.result as string;
+			const parsedAssets = parseCSV(text);
+
+			if (parsedAssets.length > 0) {
+				setImportedAssets(parsedAssets);
+				setCurrentImportIndex(0);
+				setShowImportWizard(true);
+			}
+		};
+		reader.readAsText(file);
+
+		// Reset file input
+		if (importFileInputRef.current) {
+			importFileInputRef.current.value = "";
+		}
+	};
+
+	const parseCSV = (csvText: string): any[] => {
+		const lines = csvText.split('\n').filter(line => line.trim());
+		if (lines.length < 2) return [];
+
+		// Parse header
+		const headers = parseCSVLine(lines[0]);
+
+		// Find column indices
+		const assetIdIndex = headers.findIndex(h => h.toLowerCase().includes('asset id'));
+		const categoryIndex = headers.findIndex(h => h.toLowerCase().includes('category'));
+		const descriptionIndex = headers.findIndex(h => h.toLowerCase().includes('description'));
+		const dateIndex = headers.findIndex(h => h.toLowerCase().includes('effective date') || h.toLowerCase().includes('record date'));
+		const amountIndex = headers.findIndex(h => h.toLowerCase().includes('transaction amount'));
+		const depnMethodAccIndex = headers.findIndex(h => h.toLowerCase().includes('depn method (acc)'));
+		const depnRateAccIndex = headers.findIndex(h => h.toLowerCase().includes('depn rate (acc)'));
+		const depnMethodTaxIndex = headers.findIndex(h => h.toLowerCase().includes('depn method (tax)'));
+		const depnRateTaxIndex = headers.findIndex(h => h.toLowerCase().includes('depn rate (tax)'));
+
+		const assets: any[] = [];
+
+		// Parse data rows
+		for (let i = 1; i < lines.length; i++) {
+			const values = parseCSVLine(lines[i]);
+			if (values.length < 2) continue;
+
+			// Extract serial number from description (e.g., "iPhone 14 (serial XYZ123467)")
+			const description = values[descriptionIndex] || values[categoryIndex] || "Unknown Asset";
+			const serialMatch = description.match(/\(serial\s+([^\)]+)\)/i);
+			const serialNumber = serialMatch ? serialMatch[1] : "";
+			const name = description.replace(/\(serial\s+[^\)]+\)/i, "").trim();
+
+			// Parse purchase price (remove commas and currency symbols)
+			const amountStr = values[amountIndex] || "0";
+			const purchasePrice = parseFloat(amountStr.replace(/[,NZD$]/g, '')) || 0;
+
+			// Parse date (format: "1-Apr-2023" or similar)
+			const dateStr = values[dateIndex] || "";
+			const purchaseDate = parseDate(dateStr);
+
+			assets.push({
+				assetId: values[assetIdIndex] || "",
+				itemType: values[categoryIndex] || "",
+				name: name,
+				serialNumber: serialNumber,
+				purchasePrice: purchasePrice,
+				purchaseDate: purchaseDate,
+				depnMethodAcc: values[depnMethodAccIndex] || "",
+				depnRateAcc: values[depnRateAccIndex] || "",
+				depnMethodTax: values[depnMethodTaxIndex] || "",
+				depnRateTax: values[depnRateTaxIndex] || "",
+				incomplete: purchasePrice === 0 || !purchaseDate,
+			});
+		}
+
+		return assets;
+	};
+
+	const parseCSVLine = (line: string): string[] => {
+		const result: string[] = [];
+		let current = '';
+		let inQuotes = false;
+
+		for (let i = 0; i < line.length; i++) {
+			const char = line[i];
+
+			if (char === '"') {
+				if (inQuotes && line[i + 1] === '"') {
+					current += '"';
+					i++;
+				} else {
+					inQuotes = !inQuotes;
+				}
+			} else if (char === ',' && !inQuotes) {
+				result.push(current.trim());
+				current = '';
+			} else {
+				current += char;
+			}
+		}
+		result.push(current.trim());
+
+		return result;
+	};
+
+	const parseDate = (dateStr: string): string => {
+		if (!dateStr) return "";
+
+		// Try to parse various date formats
+		// Format: "1-Apr-2023" or "01-Apr-2023"
+		const months: { [key: string]: string } = {
+			'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
+			'may': '05', 'jun': '06', 'jul': '07', 'aug': '08',
+			'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+		};
+
+		const parts = dateStr.split('-');
+		if (parts.length === 3) {
+			const day = parts[0].padStart(2, '0');
+			const monthKey = parts[1].toLowerCase().substring(0, 3);
+			const month = months[monthKey] || '01';
+			const year = parts[2];
+			return `${year}-${month}-${day}`;
+		}
+
+		// Try ISO format (YYYY-MM-DD)
+		const isoMatch = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
+		if (isoMatch) {
+			return dateStr;
+		}
+
+		return "";
+	};
+
+	const handleImportNext = async () => {
+		if (currentImportIndex < importedAssets.length - 1) {
+			setCurrentImportIndex(currentImportIndex + 1);
+		} else {
+			// All assets reviewed, create the import group
+			await createImportGroup();
+		}
+	};
+
+	const handleImportSkip = () => {
+		if (currentImportIndex < importedAssets.length - 1) {
+			setCurrentImportIndex(currentImportIndex + 1);
+		} else {
+			// All assets reviewed, create the import group
+			createImportGroup();
+		}
+	};
+
+	const handleImportEdit = (editedAsset: any) => {
+		const updatedAssets = [...importedAssets];
+		updatedAssets[currentImportIndex] = editedAsset;
+		setImportedAssets(updatedAssets);
+	};
+
+	const createImportGroup = async () => {
+		if (editingIndex === null) return;
+
+		const register = registers[editingIndex];
+		const now = new Date();
+		const timestamp = now.toISOString().replace(/[:.]/g, '-').substring(0, 19);
+		const groupName = `imported ${timestamp}`;
+
+		// Create new asset group
+		const groupId = `import-${Date.now()}`;
+		const newRoom: Room = {
+			id: groupId,
+			name: groupName,
+			tool: "rectangle",
+			color: "#8b5cf6",
+			assets: [],
+		};
+
+		// Add to local state
+		const updatedRegisters = [...registers];
+		updatedRegisters[editingIndex].rooms.push(newRoom);
+		setRegisters(updatedRegisters);
+
+		// Sync to API
+		if (register.id) {
+			try {
+				await apiService.createAssetGroup({
+					registerId: register.id,
+					id: groupId,
+					name: groupName,
+					tool: "rectangle",
+					color: "#8b5cf6",
+				});
+
+				// Create assets
+				for (const asset of importedAssets) {
+					const assetId = `asset-${Date.now()}-${Math.random()}`;
+					const newAsset = {
+						id: assetId,
+						assetId: asset.assetId || undefined,
+						itemType: asset.itemType || "",
+						name: asset.name,
+						serialNumber: asset.serialNumber || "",
+						purchasePrice: asset.purchasePrice,
+						purchaseDate: asset.purchaseDate || "",
+						incomplete: asset.incomplete,
+						depnMethodAcc: asset.depnMethodAcc || undefined,
+						depnRateAcc: asset.depnRateAcc || undefined,
+						depnMethodTax: asset.depnMethodTax || undefined,
+						depnRateTax: asset.depnRateTax || undefined,
+					};
+
+					updatedRegisters[editingIndex].rooms[updatedRegisters[editingIndex].rooms.length - 1].assets.push(newAsset);
+
+					await apiService.createAsset({
+						assetGroupId: groupId,
+						id: assetId,
+						assetId: newAsset.assetId,
+						itemType: newAsset.itemType,
+						name: newAsset.name,
+						serialNumber: newAsset.serialNumber,
+						purchasePrice: newAsset.purchasePrice,
+						purchaseDate: newAsset.purchaseDate,
+						incomplete: newAsset.incomplete,
+						depnMethodAcc: newAsset.depnMethodAcc,
+						depnRateAcc: newAsset.depnRateAcc,
+						depnMethodTax: newAsset.depnMethodTax,
+						depnRateTax: newAsset.depnRateTax,
+					});
+				}
+
+				setRegisters(updatedRegisters);
+			} catch (err) {
+				console.error("Failed to create import group:", err);
+			}
+		}
+
+		// Close wizard
+		setShowImportWizard(false);
+		setImportedAssets([]);
+		setCurrentImportIndex(0);
+	};
+
+	const closeImportWizard = () => {
+		setShowImportWizard(false);
+		setImportedAssets([]);
+		setCurrentImportIndex(0);
+	};
+
 	const handleSaveRoom = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (namingRoom && roomName.trim() && editingIndex !== null) {
@@ -706,7 +810,7 @@ export default function Home() {
 			setRegisters(updatedRegisters);
 			setNamingRoom(null);
 			setRoomName("");
-			
+
 			// Sync to API
 			const register = updatedRegisters[editingIndex];
 			if (register.id) {
@@ -726,7 +830,7 @@ export default function Home() {
 						path = newRoom.path;
 					}
 
-					await api.createAssetGroup({
+					await apiService.createAssetGroup({
 						registerId: register.id,
 						id: newRoom.id,
 						name: newRoom.name,
@@ -752,10 +856,10 @@ export default function Home() {
 			);
 			setRegisters(updatedRegisters);
 			setSelectedRoomId(null);
-			
+
 			// Sync to API
 			try {
-				await api.deleteAssetGroup(roomId);
+				await apiService.deleteAssetGroup(roomId);
 			} catch (err) {
 				console.error("Failed to delete asset group:", err);
 			}
@@ -799,7 +903,7 @@ export default function Home() {
 			if (roomIndex !== -1) {
 				const price = parseFloat(newAssetPurchasePrice) || 0;
 				const isIncomplete = !newAssetPurchasePrice || price === 0 || !newAssetPurchaseDate;
-				
+
 				if (editingAssetId) {
 					// Update existing asset
 					const assetIndex = updatedRegisters[editingIndex].rooms[roomIndex].assets.findIndex(
@@ -819,10 +923,10 @@ export default function Home() {
 						};
 						updatedRegisters[editingIndex].rooms[roomIndex].assets[assetIndex] = updatedAsset;
 						setRegisters(updatedRegisters);
-						
+
 						// Sync to API
 						try {
-							await api.updateAsset({
+							await apiService.updateAsset({
 								id: editingAssetId,
 								assetId: updatedAsset.assetId,
 								itemType: updatedAsset.itemType,
@@ -851,13 +955,13 @@ export default function Home() {
 						photo: newAssetPhoto || undefined,
 						incomplete: isIncomplete,
 					};
-					
+
 					updatedRegisters[editingIndex].rooms[roomIndex].assets.push(newAsset);
 					setRegisters(updatedRegisters);
-					
+
 					// Sync to API
 					try {
-						await api.createAsset({
+						await apiService.createAsset({
 							assetGroupId: assetWizardRoomId,
 							id: assetId,
 							assetId: newAsset.assetId,
@@ -908,10 +1012,10 @@ export default function Home() {
 					editingIndex
 				].rooms[roomIndex].assets.filter((a) => a.id !== assetId);
 				setRegisters(updatedRegisters);
-				
+
 				// Sync to API
 				try {
-					await api.deleteAsset(assetId);
+					await apiService.deleteAsset(assetId);
 				} catch (err) {
 					console.error("Failed to delete asset:", err);
 				}
@@ -958,12 +1062,12 @@ export default function Home() {
 
 			// Check if Whole Site entry already exists
 			const existingWholeSite = updatedRegisters[editingIndex].rooms.find(r => r.isWholeSite);
-			
+
 			if (!existingWholeSite) {
 				// Create a Whole Site entry
 				const wholeSiteAssets: Asset[] = [];
 				const wholeSiteRoomId = `whole-site-${Date.now()}`;
-				
+
 				if (ownsLand) {
 					wholeSiteAssets.push({
 						id: `land-${Date.now()}`,
@@ -975,7 +1079,7 @@ export default function Home() {
 						incomplete: !landValue || parseFloat(landValue) === 0 || !landPurchaseDate,
 					});
 				}
-				
+
 				if (ownsBuildings) {
 					wholeSiteAssets.push({
 						id: `buildings-${Date.now() + 1}`,
@@ -998,12 +1102,12 @@ export default function Home() {
 				};
 
 				updatedRegisters[editingIndex].rooms.unshift(wholeSiteRoom);
-				
+
 				// Sync to API
 				if (register.id) {
 					try {
 						// Create the Whole Site asset group
-						await api.createAssetGroup({
+						await apiService.createAssetGroup({
 							registerId: register.id,
 							id: wholeSiteRoomId,
 							name: "Whole Site",
@@ -1011,10 +1115,10 @@ export default function Home() {
 							color: "#6366f1",
 							isWholeSite: true,
 						});
-						
+
 						// Create the assets
 						for (const asset of wholeSiteAssets) {
-							await api.createAsset({
+							await apiService.createAsset({
 								assetGroupId: wholeSiteRoomId,
 								id: asset.id,
 								itemType: asset.itemType,
@@ -1035,7 +1139,7 @@ export default function Home() {
 				if (wholeSiteIndex !== -1) {
 					const existingAssets = updatedRegisters[editingIndex].rooms[wholeSiteIndex].assets;
 					const wholeSiteRoomId = updatedRegisters[editingIndex].rooms[wholeSiteIndex].id;
-					
+
 					// Handle Land asset
 					const landAssetIndex = existingAssets.findIndex(a => a.name === "Land");
 					if (ownsLand) {
@@ -1049,7 +1153,7 @@ export default function Home() {
 							purchaseDate: landPurchaseDate || "",
 							incomplete: !landValue || parseFloat(landValue) === 0 || !landPurchaseDate,
 						};
-						
+
 						if (landAssetIndex !== -1) {
 							// Update existing land asset
 							existingAssets[landAssetIndex] = landAsset;
@@ -1057,12 +1161,12 @@ export default function Home() {
 							// Add new land asset
 							existingAssets.push(landAsset);
 						}
-						
+
 						// Sync to API
 						if (register.id) {
 							try {
 								if (landAssetIndex !== -1) {
-									await api.updateAsset({
+									await apiService.updateAsset({
 										id: landAsset.id,
 										assetId: landAsset.assetId,
 										itemType: landAsset.itemType,
@@ -1073,7 +1177,7 @@ export default function Home() {
 										incomplete: landAsset.incomplete,
 									});
 								} else {
-									await api.createAsset({
+									await apiService.createAsset({
 										assetGroupId: wholeSiteRoomId,
 										...landAsset,
 									});
@@ -1086,17 +1190,17 @@ export default function Home() {
 						// Remove land asset if user no longer owns land
 						const landAssetId = existingAssets[landAssetIndex].id;
 						existingAssets.splice(landAssetIndex, 1);
-						
+
 						// Sync to API
 						if (register.id) {
 							try {
-								await api.deleteAsset(landAssetId);
+								await apiService.deleteAsset(landAssetId);
 							} catch (err) {
 								console.error("Failed to delete land asset:", err);
 							}
 						}
 					}
-					
+
 					// Handle Buildings asset
 					const buildingsAssetIndex = existingAssets.findIndex(a => a.name === "Buildings");
 					if (ownsBuildings) {
@@ -1110,7 +1214,7 @@ export default function Home() {
 							purchaseDate: buildingsPurchaseDate || "",
 							incomplete: !buildingsValue || parseFloat(buildingsValue) === 0 || !buildingsPurchaseDate,
 						};
-						
+
 						if (buildingsAssetIndex !== -1) {
 							// Update existing buildings asset
 							existingAssets[buildingsAssetIndex] = buildingsAsset;
@@ -1118,12 +1222,12 @@ export default function Home() {
 							// Add new buildings asset
 							existingAssets.push(buildingsAsset);
 						}
-						
+
 						// Sync to API
 						if (register.id) {
 							try {
 								if (buildingsAssetIndex !== -1) {
-									await api.updateAsset({
+									await apiService.updateAsset({
 										id: buildingsAsset.id,
 										assetId: buildingsAsset.assetId,
 										itemType: buildingsAsset.itemType,
@@ -1134,7 +1238,7 @@ export default function Home() {
 										incomplete: buildingsAsset.incomplete,
 									});
 								} else {
-									await api.createAsset({
+									await apiService.createAsset({
 										assetGroupId: wholeSiteRoomId,
 										...buildingsAsset,
 									});
@@ -1147,11 +1251,11 @@ export default function Home() {
 						// Remove buildings asset if user no longer owns buildings
 						const buildingsAssetId = existingAssets[buildingsAssetIndex].id;
 						existingAssets.splice(buildingsAssetIndex, 1);
-						
+
 						// Sync to API
 						if (register.id) {
 							try {
-								await api.deleteAsset(buildingsAssetId);
+								await apiService.deleteAsset(buildingsAssetId);
 							} catch (err) {
 								console.error("Failed to delete buildings asset:", err);
 							}
@@ -1162,11 +1266,11 @@ export default function Home() {
 
 			updatedRegisters[editingIndex].wizardCompleted = true;
 			setRegisters(updatedRegisters);
-			
+
 			// Update register in API
 			if (register.id) {
 				try {
-					await api.updateRegister({
+					await apiService.updateRegister({
 						id: register.id,
 						address: register.address,
 						sitePlan: register.sitePlan,
@@ -1189,12 +1293,12 @@ export default function Home() {
 			const updatedRegisters = [...registers];
 			updatedRegisters[editingIndex].wizardCompleted = true;
 			setRegisters(updatedRegisters);
-			
+
 			// Sync to API
 			const register = updatedRegisters[editingIndex];
 			if (register.id) {
 				try {
-					await api.updateRegister({
+					await apiService.updateRegister({
 						id: register.id,
 						address: register.address,
 						sitePlan: register.sitePlan,
@@ -1220,12 +1324,12 @@ export default function Home() {
 
 			// Check if Whole Site entry already exists
 			const existingWholeSite = updatedRegisters[editingIndex].rooms.find(r => r.isWholeSite);
-			
+
 			if (!existingWholeSite) {
 				// Create a Whole Site entry with incomplete assets
 				const wholeSiteAssets: Asset[] = [];
 				const wholeSiteRoomId = `whole-site-${Date.now()}`;
-				
+
 				if (ownsLand) {
 					wholeSiteAssets.push({
 						id: `land-${Date.now()}`,
@@ -1237,7 +1341,7 @@ export default function Home() {
 						incomplete: true,
 					});
 				}
-				
+
 				if (ownsBuildings) {
 					wholeSiteAssets.push({
 						id: `buildings-${Date.now() + 1}`,
@@ -1260,11 +1364,11 @@ export default function Home() {
 				};
 
 				updatedRegisters[editingIndex].rooms.unshift(wholeSiteRoom);
-				
+
 				// Sync to API
 				if (register.id) {
 					try {
-						await api.createAssetGroup({
+						await apiService.createAssetGroup({
 							registerId: register.id,
 							id: wholeSiteRoomId,
 							name: "Whole Site",
@@ -1272,9 +1376,9 @@ export default function Home() {
 							color: "#6366f1",
 							isWholeSite: true,
 						});
-						
+
 						for (const asset of wholeSiteAssets) {
-							await api.createAsset({
+							await apiService.createAsset({
 								assetGroupId: wholeSiteRoomId,
 								id: asset.id,
 								itemType: asset.itemType,
@@ -1293,11 +1397,11 @@ export default function Home() {
 
 			updatedRegisters[editingIndex].wizardCompleted = true;
 			setRegisters(updatedRegisters);
-			
+
 			// Update register in API
 			if (register.id) {
 				try {
-					await api.updateRegister({
+					await apiService.updateRegister({
 						id: register.id,
 						address: register.address,
 						sitePlan: register.sitePlan,
@@ -1320,6 +1424,115 @@ export default function Home() {
 			style: "currency",
 			currency: "NZD",
 		}).format(value);
+	};
+
+	// Depreciation calculation functions
+	const calculateDepreciation = (asset: any, type: "working" | "register") => {
+		const purchasePrice = asset.purchasePrice || 0;
+		const purchaseDate = asset.purchaseDate ? new Date(asset.purchaseDate) : null;
+		const depnMethodAcc = asset.depnMethodAcc || "";
+		const depnRateAcc = asset.depnRateAcc || "";
+		const depnMethodTax = asset.depnMethodTax || "";
+		const depnRateTax = asset.depnRateTax || "";
+
+		if (!purchaseDate) {
+			return {
+				assetId: asset.assetId || "",
+				name: asset.name,
+				purchasePrice,
+				accDepreciation: 0,
+				taxDepreciation: 0,
+				bookValueAcc: purchasePrice,
+				bookValueTax: purchasePrice,
+				monthsHeld: 0,
+			};
+		}
+
+		const now = new Date();
+		const monthsHeld = Math.floor((now.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24 * 30));
+
+		// Parse depreciation rate (e.g., "2%" -> 0.02)
+		const parseRate = (rate: string) => {
+			if (!rate) return 0;
+			const parsed = parseFloat(rate.replace("%", ""));
+			return isNaN(parsed) ? 0 : parsed / 100;
+		};
+
+		const rateAcc = parseRate(depnRateAcc);
+		const rateTax = parseRate(depnRateTax);
+
+		// Calculate depreciation based on method
+		const calculateByMethod = (price: number, rate: number, method: string, months: number) => {
+			if (!method || method.toLowerCase() === "non-depreciable") {
+				return 0;
+			}
+
+			if (method.toLowerCase() === "low-value write-off") {
+				return price; // Full write-off in first year
+			}
+
+			if (method.toLowerCase().includes("straight-line")) {
+				// Straight-line: (Cost × Rate) / 12 × months
+				return (price * rate * months) / 12;
+			}
+
+			if (method.toLowerCase().includes("diminishing")) {
+				// Diminishing value: Book Value × Rate × (months / 12)
+				let bookValue = price;
+				let totalDepreciation = 0;
+				const years = months / 12;
+
+				for (let i = 0; i < years; i++) {
+					const yearlyDepreciation = bookValue * rate;
+					totalDepreciation += yearlyDepreciation;
+					bookValue -= yearlyDepreciation;
+				}
+
+				// Add partial year depreciation
+				const partialMonths = months % 12;
+				if (partialMonths > 0) {
+					totalDepreciation += bookValue * rate * (partialMonths / 12);
+				}
+
+				return totalDepreciation;
+			}
+
+			return 0;
+		};
+
+		const accDepreciation = calculateByMethod(purchasePrice, rateAcc, depnMethodAcc, monthsHeld);
+		const taxDepreciation = calculateByMethod(purchasePrice, rateTax, depnMethodTax, monthsHeld);
+
+		return {
+			assetId: asset.assetId || "",
+			name: asset.name,
+			purchasePrice,
+			accDepreciation,
+			taxDepreciation,
+			bookValueAcc: Math.max(0, purchasePrice - accDepreciation),
+			bookValueTax: Math.max(0, purchasePrice - taxDepreciation),
+			monthsHeld,
+		};
+	};
+
+	const handleFYWorking = () => {
+		if (editingIndex === null) return;
+		const register = registers[editingIndex];
+		const results = register.rooms.flatMap((room) =>
+			room.assets.map((asset) => calculateDepreciation(asset, "working"))
+		);
+		setDepreciationResults(results);
+		setShowDepreciationModal(true);
+	};
+
+	const handleFYRegister = () => {
+		if (editingIndex === null) return;
+		const register = registers[editingIndex];
+		const results = register.rooms.flatMap((room) =>
+			room.assets.map((asset) => calculateDepreciation(asset, "register"))
+		);
+		setDepreciationResults(results);
+		setShowDepreciationModal(true);
 	};
 
 	const renderShape = (room: Room, isPreview = false) => {
@@ -1480,6 +1693,19 @@ export default function Home() {
 										Export CSV
 									</button>
 									<button
+										onClick={() => importFileInputRef.current?.click()}
+										className="px-4 py-2 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors"
+									>
+										Import CSV
+									</button>
+									<input
+										ref={importFileInputRef}
+										type="file"
+										accept=".csv"
+										className="hidden"
+										onChange={handleCSVImport}
+									/>
+									<button
 										onClick={handleRemoveSitePlan}
 										className="px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors"
 									>
@@ -1500,6 +1726,19 @@ export default function Home() {
 									>
 										Export CSV
 									</button>
+									<button
+										onClick={() => importFileInputRef.current?.click()}
+										className="px-4 py-2 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors"
+									>
+										Import CSV
+									</button>
+									<input
+										ref={importFileInputRef}
+										type="file"
+										accept=".csv"
+										className="hidden"
+										onChange={handleCSVImport}
+									/>
 									<button
 										onClick={handleRemoveSitePlan}
 										className="px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors"
@@ -1837,6 +2076,35 @@ export default function Home() {
 							</div>
 						)}
 
+						{/* Import Wizard Modal */}
+						{showImportWizard && importedAssets.length > 0 && (
+							<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+								<div className="bg-white rounded-lg p-6 shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+									<div className="flex justify-between items-center mb-6">
+										<h3 className="text-lg font-semibold text-gray-900">
+											Import Assets ({currentImportIndex + 1} of {importedAssets.length})
+										</h3>
+										<button
+											onClick={closeImportWizard}
+											className="text-gray-400 hover:text-gray-600"
+										>
+											<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+											</svg>
+										</button>
+									</div>
+
+									<ImportAssetForm
+										asset={importedAssets[currentImportIndex]}
+										onSave={handleImportEdit}
+										onNext={handleImportNext}
+										onSkip={handleImportSkip}
+										isLast={currentImportIndex === importedAssets.length - 1}
+									/>
+								</div>
+							</div>
+						)}
+
 						{/* Confirm Delete Room Modal */}
 						{confirmDeleteRoomId && (
 							<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -2045,7 +2313,7 @@ export default function Home() {
 												</div>
 
 												{/* Show already added assets */}
-												{wizardRoom.assets.length > 0 && (
+												{wizardRoom.assets.length > 0 && !editingAssetId && (
 													<div className="border-t pt-4 mt-2">
 														<p className="text-sm font-medium text-gray-700 mb-2">
 															Assets added ({wizardRoom.assets.length}):
@@ -2086,20 +2354,23 @@ export default function Home() {
 													<button
 														type="button"
 														onClick={closeAssetWizard}
-														className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+														className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
 													>
-														Done
+														<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+															<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+														</svg>
+														Back
 													</button>
 													<button
 														type="submit"
 														disabled={!newAssetName.trim()}
-														className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-														title="Add asset"
+														className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+														title="Save asset"
 													>
 														<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 															<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
 														</svg>
-														Add Item
+														Save
 													</button>
 												</div>
 											</form>
@@ -2193,11 +2464,10 @@ export default function Home() {
 												</div>
 											</div>
 											{/* Assets list */}
-											{room.assets.length > 0 && (
+											{room.assets.length > 0 && !assetWizardRoomId && (
 												<ul className="px-3 pb-2 space-y-1">
 													{room.assets.map((asset) => {
 														const isIncomplete = asset.incomplete;
-														const isExpanded = expandedIncompleteAssets.has(asset.id);
 
 														return (
 															<li
@@ -2205,8 +2475,21 @@ export default function Home() {
 																className={`py-1 px-2 rounded text-sm ${isIncomplete ? 'bg-amber-50 border border-amber-200' : 'bg-white'}`}
 															>
 																{isIncomplete ? (
-																	// Collapsed view for incomplete assets
-																	<div className="flex items-center justify-between">
+																	// Collapsed view for incomplete assets (no dropdown)
+																	<div
+																		onClick={() => {
+																			setNewAssetItemType(asset.itemType || "");
+																			setNewAssetName(asset.name);
+																			setNewAssetId(asset.assetId || "");
+																			setNewAssetSerialNumber(asset.serialNumber || "");
+																			setNewAssetPurchasePrice(asset.purchasePrice ? asset.purchasePrice.toString() : "");
+																			setNewAssetPurchaseDate(asset.purchaseDate || "");
+																			setNewAssetPhoto(asset.photo || null);
+																			setEditingAssetId(asset.id);
+																			openAssetWizard(room.id);
+																		}}
+																		className="flex items-center justify-between cursor-pointer hover:bg-amber-100 transition-colors"
+																	>
 																		<div className="flex items-center gap-2">
 																			{asset.photo && (
 																				<img
@@ -2220,25 +2503,6 @@ export default function Home() {
 																			</span>
 																		</div>
 																		<div className="flex gap-2">
-																			<button
-																				onClick={() => {
-																					setExpandedIncompleteAssets(prev => {
-																						const newSet = new Set(prev);
-																						if (newSet.has(asset.id)) {
-																							newSet.delete(asset.id);
-																						} else {
-																							newSet.add(asset.id);
-																						}
-																						return newSet;
-																					});
-																				}}
-																				className="text-amber-600 hover:text-amber-800 p-1"
-																				title={isExpanded ? "Collapse" : "Expand"}
-																			>
-																				<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-																					<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isExpanded ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"} />
-																				</svg>
-																			</button>
 																			<button
 																				onClick={(e) => {
 																					e.stopPropagation();
@@ -2311,42 +2575,6 @@ export default function Home() {
 																					<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
 																				</svg>
 																			</button>
-																		</div>
-																	</div>
-																)}
-																{/* Expanded details for incomplete assets */}
-																{isIncomplete && isExpanded && (
-																	<div className="mt-2 pt-2 border-t border-amber-200">
-																		<div className="flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors px-2 py-1 rounded"
-																			onClick={() => {
-																				setNewAssetItemType(asset.itemType || "");
-																				setNewAssetName(asset.name);
-																				setNewAssetId(asset.assetId || "");
-																				setNewAssetSerialNumber(asset.serialNumber || "");
-																				setNewAssetPurchasePrice(asset.purchasePrice ? asset.purchasePrice.toString() : "");
-																				setNewAssetPurchaseDate(asset.purchaseDate || "");
-																				setNewAssetPhoto(asset.photo || null);
-																				setEditingAssetId(asset.id);
-																				openAssetWizard(room.id);
-																			}}
-																		>
-																			<div className="flex-1">
-																				{asset.serialNumber && (
-																					<span className="text-gray-400 text-xs">
-																						Serial: {asset.serialNumber}
-																					</span>
-																				)}
-																				{asset.purchasePrice > 0 && (
-																					<span className="text-gray-500 ml-2">
-																						Value: {formatCurrency(asset.purchasePrice)}
-																					</span>
-																				)}
-																				{asset.purchaseDate && (
-																					<span className="text-gray-400 ml-2 text-xs">
-																						Date: {asset.purchaseDate}
-																					</span>
-																				)}
-																			</div>
 																		</div>
 																	</div>
 																)}
@@ -2548,6 +2776,85 @@ export default function Home() {
 							</li>
 						))}
 					</ul>
+				</div>
+			)}
+
+			{/* Depreciation Results Modal */}
+			{showDepreciationModal && (
+				<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+					<div className="bg-white rounded-lg p-6 shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+						<div className="flex items-center justify-between mb-4">
+							<h2 className="text-xl font-semibold text-gray-900">
+								Depreciation Report - FY {financialYear}
+							</h2>
+							<button
+								onClick={() => setShowDepreciationModal(false)}
+								className="text-gray-400 hover:text-gray-600"
+							>
+								<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+								</svg>
+							</button>
+						</div>
+
+						<div className="overflow-x-auto">
+							<table className="w-full border-collapse">
+								<thead>
+									<tr className="bg-gray-50">
+										<th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border-b">Asset ID</th>
+										<th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border-b">Asset Name</th>
+										<th className="px-4 py-2 text-right text-sm font-medium text-gray-700 border-b">Purchase Price</th>
+										<th className="px-4 py-2 text-right text-sm font-medium text-gray-700 border-b">Months Held</th>
+										<th className="px-4 py-2 text-right text-sm font-medium text-gray-700 border-b">Acc. Depreciation</th>
+										<th className="px-4 py-2 text-right text-sm font-medium text-gray-700 border-b">Acc. Book Value</th>
+										<th className="px-4 py-2 text-right text-sm font-medium text-gray-700 border-b">Tax Depreciation</th>
+										<th className="px-4 py-2 text-right text-sm font-medium text-gray-700 border-b">Tax Book Value</th>
+									</tr>
+								</thead>
+								<tbody>
+									{depreciationResults.map((result, index) => (
+										<tr key={index} className="border-b hover:bg-gray-50">
+											<td className="px-4 py-2 text-sm text-gray-900">{result.assetId || "-"}</td>
+											<td className="px-4 py-2 text-sm text-gray-900">{result.name}</td>
+											<td className="px-4 py-2 text-sm text-gray-900 text-right">{formatCurrency(result.purchasePrice)}</td>
+											<td className="px-4 py-2 text-sm text-gray-900 text-right">{result.monthsHeld}</td>
+											<td className="px-4 py-2 text-sm text-gray-900 text-right">{formatCurrency(result.accDepreciation)}</td>
+											<td className="px-4 py-2 text-sm text-gray-900 text-right">{formatCurrency(result.bookValueAcc)}</td>
+											<td className="px-4 py-2 text-sm text-gray-900 text-right">{formatCurrency(result.taxDepreciation)}</td>
+											<td className="px-4 py-2 text-sm text-gray-900 text-right">{formatCurrency(result.bookValueTax)}</td>
+										</tr>
+									))}
+								</tbody>
+								<tfoot>
+									<tr className="bg-gray-100 font-semibold">
+										<td className="px-4 py-3 text-sm text-gray-900" colSpan={3}>Total</td>
+										<td className="px-4 py-3 text-sm text-gray-900 text-right">-</td>
+										<td className="px-4 py-3 text-sm text-gray-900 text-right">
+											{formatCurrency(depreciationResults.reduce((sum, r) => sum + r.accDepreciation, 0))}
+										</td>
+										<td className="px-4 py-3 text-sm text-gray-900 text-right">
+											{formatCurrency(depreciationResults.reduce((sum, r) => sum + r.bookValueAcc, 0))}
+										</td>
+										<td className="px-4 py-3 text-sm text-gray-900 text-right">
+											{formatCurrency(depreciationResults.reduce((sum, r) => sum + r.taxDepreciation, 0))}
+										</td>
+										<td className="px-4 py-3 text-sm text-gray-900 text-right">
+											{formatCurrency(depreciationResults.reduce((sum, r) => sum + r.bookValueTax, 0))}
+										</td>
+									</tr>
+								</tfoot>
+							</table>
+						</div>
+
+						<div className="flex gap-3 justify-end mt-4 pt-4 border-t">
+							<button
+								onClick={() => setShowDepreciationModal(false)}
+								className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+							>
+								Close
+							</button>
+						</div>
+					</div>
 				</div>
 			)}
 		</div>

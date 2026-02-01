@@ -76,6 +76,10 @@ export async function loader({ context }: Route.LoaderArgs) {
 							purchaseDate: asset.purchase_date || "",
 							photo: asset.photo,
 							incomplete: Boolean(asset.incomplete),
+							depnMethodAcc: asset.depn_method_acc || "",
+							depnRateAcc: asset.depn_rate_acc || "",
+							depnMethodTax: asset.depn_method_tax || "",
+							depnRateTax: asset.depn_rate_tax || "",
 						})),
 					};
 				})
@@ -103,7 +107,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 	if (method === "POST") {
 		const data = await request.json();
-		const { action: actionType, ...payload } = data;
+		const { action: actionType, ...payload } = data as { action: string; [key: string]: any };
 
 		if (actionType === "create_register") {
 			const id = `register-${Date.now()}`;
@@ -220,8 +224,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 			const id = payload.id || `asset-${Date.now()}`;
 			await db
 				.prepare(
-					`INSERT INTO assets (id, asset_group_id, asset_id, item_type, name, serial_number, purchase_price, purchase_date, photo, incomplete)
-					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+					`INSERT INTO assets (id, asset_group_id, asset_id, item_type, name, serial_number, purchase_price, purchase_date, photo, incomplete, depn_method_acc, depn_rate_acc, depn_method_tax, depn_rate_tax)
+					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 				)
 				.bind(
 					id,
@@ -233,7 +237,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 					payload.purchasePrice || 0,
 					payload.purchaseDate || null,
 					payload.photo || null,
-					payload.incomplete ? 1 : 0
+					payload.incomplete ? 1 : 0,
+					payload.depnMethodAcc || null,
+					payload.depnRateAcc || null,
+					payload.depnMethodTax || null,
+					payload.depnRateTax || null
 				)
 				.run();
 
@@ -252,6 +260,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 						purchase_date = ?, 
 						photo = ?, 
 						incomplete = ?,
+						depn_method_acc = ?,
+						depn_rate_acc = ?,
+						depn_method_tax = ?,
+						depn_rate_tax = ?,
 						updated_at = datetime('now')
 					WHERE id = ?`
 				)
@@ -264,6 +276,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 					payload.purchaseDate || null,
 					payload.photo || null,
 					payload.incomplete ? 1 : 0,
+					payload.depnMethodAcc || null,
+					payload.depnRateAcc || null,
+					payload.depnMethodTax || null,
+					payload.depnRateTax || null,
 					payload.id
 				)
 				.run();
