@@ -2404,7 +2404,7 @@ export default function Home() {
 						)}
 
 						{/* Room list */}
-						{register.wizardCompleted && register.rooms.length > 0 && (
+						{register.rooms.length > 0 && (
 							<div className="w-full max-w-lg mt-4">
 								<h3 className="text-sm font-medium text-gray-700 mb-2">
 									Asset Groups ({register.rooms.length})
@@ -2590,7 +2590,7 @@ export default function Home() {
 						)}
 
 						{/* Incomplete Items Section */}
-						{register.wizardCompleted && register.rooms.some(room => room.assets.some(asset => asset.incomplete)) && (
+						{register.rooms.some(room => room.assets.some(asset => asset.incomplete)) && (
 							<div className="w-full max-w-lg mt-4">
 								<div
 									className="flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors p-2 rounded-lg border border-amber-200 bg-amber-50"
