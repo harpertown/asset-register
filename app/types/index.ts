@@ -45,6 +45,20 @@ export interface Register {
   ownsLand?: boolean;
   ownsBuildings?: boolean;
   wizardCompleted?: boolean;
+  landValue?: string;
+  landPurchaseDate?: string;
+  buildingsValue?: string;
+  buildingsPurchaseDate?: string;
+}
+
+export interface Transaction {
+  assetId: string;
+  assetCategory: string;
+  assetDescription: string;
+  recordDate: string;
+  effectiveDate: string;
+  financialMonth: number;
+  financialYear: number;
 }
 
 export type WizardStep = "question" | "addItem";

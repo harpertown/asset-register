@@ -1,95 +1,15 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate, useParams, useLocation } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import React from "react";
-
-const api = {
-	async getRegisters(): Promise<Register[]> {
-		const res = await fetch("/api/registers");
-		if (!res.ok) throw new Error("Failed to fetch registers");
-		return res.json();
-	},
-};
-
-interface Asset {
-	id: string;
-	assetId?: string;
-	itemType: string;
-	name: string;
-	serialNumber: string;
-	purchasePrice: number;
-	purchaseDate: string;
-	photo?: string;
-	incomplete?: boolean;
-	depnMethodAcc?: string;
-	depnRateAcc?: string;
-	depnMethodTax?: string;
-	depnRateTax?: string;
-}
-
-interface Room {
-	id: string;
-	name: string;
-	tool: "rectangle" | "circle" | "pen";
-	color: string;
-	assets: Asset[];
-	isWholeSite?: boolean;
-	rect?: { x: number; y: number; width: number; height: number };
-	circle?: { cx: number; cy: number; radius: number };
-	path?: { x: number; y: number }[];
-}
-
-interface Register {
-	id?: string;
-	address: string;
-	sitePlan: string | null;
-	rooms: Room[];
-	ownsLand?: boolean;
-	ownsBuildings?: boolean;
-	wizardCompleted?: boolean;
-	landValue?: string;
-	landPurchaseDate?: string;
-	buildingsValue?: string;
-	buildingsPurchaseDate?: string;
-}
-
-interface Transaction {
-	assetId: string;
-	assetCategory: string;
-	assetDescription: string;
-	recordDate: string;
-	effectiveDate: string;
-	financialMonth: number;
-	financialYear: number;
-}
+import { apiService } from "~/services/api";
+import type { Register, Transaction, Asset } from "~/types";
+import { formatCurrency, currencyCellStyle, calculateFinancialPeriod, formatDate } from "~/utils";
 
 export function meta() {
 	return [
 		{ title: "All Assets" },
 		{ name: "description", content: "Asset Register - All Assets" },
 	];
-}
-
-function calculateFinancialPeriod(dateStr: string): { month: number; year: number } {
-	if (!dateStr) return { month: 1, year: new Date().getFullYear() };
-	const date = new Date(dateStr);
-	const month = date.getMonth() + 1;
-	const year = date.getFullYear();
-	let financialMonth: number;
-	let financialYear: number;
-	if (month >= 4) {
-		financialMonth = month - 3;
-		financialYear = year + 1;
-	} else {
-		financialMonth = month + 9;
-		financialYear = year;
-	}
-	return { month: financialMonth, year: financialYear };
-}
-
-function formatDate(dateStr: string): string {
-	if (!dateStr) return "";
-	const date = new Date(dateStr);
-	return date.toLocaleDateString("en-NZ", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 export default function Transactions() {
@@ -110,7 +30,7 @@ export default function Transactions() {
 	const loadData = useCallback(async () => {
 		try {
 			setIsLoading(true);
-			const registers = await api.getRegisters();
+			const registers = await apiService.getRegisters();
 			const idx = registers.findIndex((r) => r.id === registerId);
 			const found = registers[idx];
 			if (!found) {
@@ -318,19 +238,6 @@ export default function Transactions() {
 		setDepreciationResults(combinedResults);
 		setShowDepreciationModal(true);
 	};
-
-	const formatCurrency = (amount: number) => {
-		if (amount === 0) {
-			return "-";
-		}
-		return new Intl.NumberFormat("en-NZ", {
-			style: "currency",
-			currency: "NZD",
-		}).format(amount);
-	};
-
-	// Minimum width style for currency cells to fit "$00,000,000.00"
-	const currencyCellStyle = { minWidth: '90px' };
 
 	if (isLoading) {
 		return (
