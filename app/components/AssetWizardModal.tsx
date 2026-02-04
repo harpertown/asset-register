@@ -1,78 +1,76 @@
-import { useState, useRef, useEffect } from "react";
-import type { Room, WizardStep } from "~/types";
+import { useRef, useEffect } from "react";
+import type { Room, WizardStep, Asset } from "~/types";
+import { formatCurrency } from "~/utils";
 
 interface AssetWizardModalProps {
-  assetWizardStep: WizardStep;
+  isOpen: boolean;
   wizardRoom: Room | null;
+  step: WizardStep;
+  isEditing: boolean;
+  state: {
+    itemType: string;
+    name: string;
+    assetId: string;
+    serialNumber: string;
+    purchasePrice: string;
+    purchaseDate: string;
+    photo: string | null;
+    itemTypeSuggestions: string[];
+    showItemTypeSuggestions: boolean;
+  };
+  refs: {
+    itemTypeInputRef: React.RefObject<HTMLInputElement | null>;
+    itemTypeSuggestionsRef: React.RefObject<HTMLUListElement | null>;
+  };
   onClose: () => void;
   onYes: () => void;
   onNo: () => void;
-  newAssetItemType: string;
   onItemTypeChange: (value: string) => void;
-  itemTypeSuggestions: string[];
-  showItemTypeSuggestions: boolean;
   onItemTypeSelect: (type: string) => void;
-  newAssetName: string;
-  onNameChange: (value: string) => void;
-  newAssetId: string;
-  onIdChange: (value: string) => void;
-  newAssetSerialNumber: string;
-  onSerialNumberChange: (value: string) => void;
-  newAssetPurchasePrice: string;
-  onPurchasePriceChange: (value: string) => void;
-  newAssetPurchaseDate: string;
-  onPurchaseDateChange: (value: string) => void;
-  newAssetPhoto: string | null;
+  onItemTypeFocus: () => void;
+  onFieldChange: (field: string, value: string | null) => void;
   onPhotoUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onRemovePhoto: () => void;
   onAddAsset: (e: React.FormEvent) => void;
-  editingAssetId: string | null;
-  assetWizardRoomId: string | null;
-  wizardRoomAssets: any[];
-  onEditAsset: (asset: any) => void;
-  onCancelEdit: () => void;
+  onEditAsset: (asset: Asset) => void;
 }
 
+const ASSET_CATEGORIES = [
+  "Computers and laptops",
+  "Computer hardware, including printers",
+  "Computer software programs",
+  "Photocopiers",
+  "Office furniture",
+  "Tools of the trade",
+  "Plant or machinery used for production",
+  "Art",
+  "Motor vehicles",
+];
+
 export default function AssetWizardModal({
-  assetWizardStep,
+  isOpen,
   wizardRoom,
+  step,
+  isEditing,
+  state,
+  refs,
   onClose,
   onYes,
   onNo,
-  newAssetItemType,
   onItemTypeChange,
-  itemTypeSuggestions,
-  showItemTypeSuggestions,
   onItemTypeSelect,
-  newAssetName,
-  onNameChange,
-  newAssetId,
-  onIdChange,
-  newAssetSerialNumber,
-  onSerialNumberChange,
-  newAssetPurchasePrice,
-  onPurchasePriceChange,
-  newAssetPurchaseDate,
-  onPurchaseDateChange,
-  newAssetPhoto,
+  onItemTypeFocus,
+  onFieldChange,
   onPhotoUpload,
-  onRemovePhoto,
   onAddAsset,
-  editingAssetId,
-  wizardRoomAssets,
   onEditAsset,
-  onCancelEdit
 }: AssetWizardModalProps) {
-  const itemTypeInputRef = useRef<HTMLInputElement>(null);
-  const itemTypeSuggestionsRef = useRef<HTMLUListElement>(null);
-
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
-        itemTypeSuggestionsRef.current &&
-        !itemTypeSuggestionsRef.current.contains(event.target as Node) &&
-        itemTypeInputRef.current &&
-        !itemTypeInputRef.current.contains(event.target as Node)
+        refs.itemTypeSuggestionsRef.current &&
+        !refs.itemTypeSuggestionsRef.current.contains(event.target as Node) &&
+        refs.itemTypeInputRef.current &&
+        !refs.itemTypeInputRef.current.contains(event.target as Node)
       ) {
         // Don't hide suggestions here since they're handled differently
       }
@@ -80,26 +78,14 @@ export default function AssetWizardModal({
 
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [refs]);
 
-  const ASSET_CATEGORIES = [
-    "Computers and laptops",
-    "Computer hardware, including printers",
-    "Computer software programs",
-    "Photocopiers",
-    "Office furniture",
-    "Tools of the trade",
-    "Plant or machinery used for production",
-    "Art",
-    "Motor vehicles",
-  ];
-
-  if (!wizardRoom) return null;
+  if (!isOpen || !wizardRoom) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 shadow-xl max-w-lg w-full mx-4">
-        {assetWizardStep === "question" && (
+        {step === "question" && (
           <>
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               Add Assets to {wizardRoom.name}
@@ -129,7 +115,7 @@ export default function AssetWizardModal({
           </>
         )}
 
-        {assetWizardStep === "addItem" && (
+        {step === "addItem" && (
           <>
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               Add Assets to {wizardRoom.name}
@@ -140,25 +126,21 @@ export default function AssetWizardModal({
                   Item Type (IRD Depreciation Guide)
                 </label>
                 <input
-                  ref={itemTypeInputRef}
+                  ref={refs.itemTypeInputRef}
                   type="text"
-                  value={newAssetItemType}
+                  value={state.itemType}
                   onChange={(e) => onItemTypeChange(e.target.value)}
-                  onFocus={() => {
-                    if (newAssetItemType.length >= 1 && itemTypeSuggestions.length > 0) {
-                      // This would be handled by parent component
-                    }
-                  }}
+                  onFocus={onItemTypeFocus}
                   placeholder="Start typing to search..."
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-gray-900"
                   autoFocus
                 />
-                {showItemTypeSuggestions && itemTypeSuggestions.length > 0 && (
+                {state.showItemTypeSuggestions && state.itemTypeSuggestions.length > 0 && (
                   <ul
-                    ref={itemTypeSuggestionsRef}
+                    ref={refs.itemTypeSuggestionsRef}
                     className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto"
                   >
-                    {itemTypeSuggestions.map((type, index) => (
+                    {state.itemTypeSuggestions.map((type, index) => (
                       <li
                         key={index}
                         onClick={() => onItemTypeSelect(type)}
@@ -176,8 +158,8 @@ export default function AssetWizardModal({
                 </label>
                 <input
                   type="text"
-                  value={newAssetName}
-                  onChange={(e) => onNameChange(e.target.value)}
+                  value={state.name}
+                  onChange={(e) => onFieldChange("name", e.target.value)}
                   placeholder="e.g., Dell XPS 15, Standing Desk..."
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-gray-900"
                 />
@@ -188,8 +170,8 @@ export default function AssetWizardModal({
                 </label>
                 <input
                   type="text"
-                  value={newAssetId}
-                  onChange={(e) => onIdChange(e.target.value)}
+                  value={state.assetId}
+                  onChange={(e) => onFieldChange("assetId", e.target.value)}
                   placeholder="e.g., ASSET-001, INV-123..."
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-gray-900"
                 />
@@ -200,8 +182,8 @@ export default function AssetWizardModal({
                 </label>
                 <input
                   type="text"
-                  value={newAssetSerialNumber}
-                  onChange={(e) => onSerialNumberChange(e.target.value)}
+                  value={state.serialNumber}
+                  onChange={(e) => onFieldChange("serialNumber", e.target.value)}
                   placeholder="e.g., SN123456789"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-gray-900"
                 />
@@ -212,8 +194,8 @@ export default function AssetWizardModal({
                 </label>
                 <input
                   type="number"
-                  value={newAssetPurchasePrice}
-                  onChange={(e) => onPurchasePriceChange(e.target.value)}
+                  value={state.purchasePrice}
+                  onChange={(e) => onFieldChange("purchasePrice", e.target.value)}
                   placeholder="0.00"
                   min="0"
                   step="0.01"
@@ -226,8 +208,8 @@ export default function AssetWizardModal({
                 </label>
                 <input
                   type="date"
-                  value={newAssetPurchaseDate}
-                  onChange={(e) => onPurchaseDateChange(e.target.value)}
+                  value={state.purchaseDate}
+                  onChange={(e) => onFieldChange("purchaseDate", e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-gray-900"
                 />
               </div>
@@ -235,16 +217,16 @@ export default function AssetWizardModal({
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Photo (optional)
                 </label>
-                {newAssetPhoto ? (
+                {state.photo ? (
                   <div className="flex items-center gap-3">
                     <img
-                      src={newAssetPhoto}
+                      src={state.photo}
                       alt="Asset preview"
                       className="w-16 h-16 object-cover rounded-lg border border-gray-300"
                     />
                     <button
                       type="button"
-                      onClick={onRemovePhoto}
+                      onClick={() => onFieldChange("photo", null)}
                       className="text-red-600 hover:text-red-800 p-1"
                       title="Remove photo"
                     >
@@ -272,20 +254,20 @@ export default function AssetWizardModal({
               </div>
 
               {/* Show already added assets */}
-              {wizardRoomAssets.length > 0 && !editingAssetId && (
+              {wizardRoom.assets.length > 0 && !isEditing && (
                 <div className="border-t pt-4 mt-2">
                   <p className="text-sm font-medium text-gray-700 mb-2">
-                    Assets added ({wizardRoomAssets.length}):
+                    Assets added ({wizardRoom.assets.length}):
                   </p>
                   <ul className="space-y-1 max-h-32 overflow-y-auto">
-                    {wizardRoomAssets.map((asset) => (
+                    {wizardRoom.assets.map((asset) => (
                       <li
                         key={asset.id}
                         className="text-sm text-gray-600 flex justify-between items-center"
                       >
                         <span>{asset.itemType}: {asset.name}</span>
                         <div className="flex items-center gap-2">
-                          <span>${asset.purchasePrice}</span>
+                          <span>{formatCurrency(asset.purchasePrice)}</span>
                           <button
                             type="button"
                             onClick={() => onEditAsset(asset)}
@@ -303,7 +285,7 @@ export default function AssetWizardModal({
               <div className="flex gap-3 justify-end mt-2">
                 <button
                   type="button"
-                  onClick={onCancelEdit}
+                  onClick={onClose}
                   className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -313,7 +295,7 @@ export default function AssetWizardModal({
                 </button>
                 <button
                   type="submit"
-                  disabled={!newAssetName.trim()}
+                  disabled={!state.name.trim()}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   title="Save asset"
                 >
