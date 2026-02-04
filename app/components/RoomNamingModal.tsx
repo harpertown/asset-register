@@ -1,3 +1,5 @@
+import ModalWrapper from "./ModalWrapper";
+
 interface RoomNamingModalProps {
   namingRoom: any;
   roomName: string;
@@ -13,14 +15,9 @@ export default function RoomNamingModal({
   onSave,
   onCancel
 }: RoomNamingModalProps) {
-  if (!namingRoom) return null;
-
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <form
-        onSubmit={onSave}
-        className="bg-white rounded-lg p-6 shadow-xl flex flex-col gap-4"
-      >
+    <ModalWrapper isOpen={!!namingRoom} onClose={onCancel} maxWidth="max-w-sm">
+      <form onSubmit={onSave} className="flex flex-col gap-4">
         <h3 className="text-lg font-semibold text-gray-900">Name this room</h3>
         <input
           type="text"
@@ -46,6 +43,6 @@ export default function RoomNamingModal({
           </button>
         </div>
       </form>
-    </div>
+    </ModalWrapper>
   );
 }

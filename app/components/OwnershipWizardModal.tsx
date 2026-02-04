@@ -1,4 +1,5 @@
 import type { OwnershipWizardStep } from "~/types";
+import ModalWrapper from "./ModalWrapper";
 
 interface OwnershipWizardModalProps {
   ownershipWizardStep: OwnershipWizardStep;
@@ -47,9 +48,10 @@ export default function OwnershipWizardModal({
   ownsLandDisabled,
   ownsBuildingsDisabled
 }: OwnershipWizardModalProps) {
+  const isOpen = ownershipWizardStep === "questions" || ownershipWizardStep === "values";
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 shadow-xl max-w-md w-full mx-4">
+    <ModalWrapper isOpen={isOpen} onClose={onClose} maxWidth="max-w-md">
         {ownershipWizardStep === "questions" && (
           <>
             <h3 className="text-lg font-semibold text-gray-900 mb-6">
@@ -232,7 +234,6 @@ export default function OwnershipWizardModal({
             </div>
           </>
         )}
-      </div>
-    </div>
+    </ModalWrapper>
   );
 }

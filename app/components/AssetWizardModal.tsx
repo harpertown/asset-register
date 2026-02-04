@@ -1,6 +1,7 @@
-import { useRef, useEffect } from "react";
 import type { Room, WizardStep, Asset } from "~/types";
 import { formatCurrency } from "~/utils";
+import ModalWrapper from "./ModalWrapper";
+import { useClickOutside } from "~/hooks";
 
 interface AssetWizardModalProps {
   isOpen: boolean;
@@ -64,27 +65,19 @@ export default function AssetWizardModal({
   onAddAsset,
   onEditAsset,
 }: AssetWizardModalProps) {
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        refs.itemTypeSuggestionsRef.current &&
-        !refs.itemTypeSuggestionsRef.current.contains(event.target as Node) &&
-        refs.itemTypeInputRef.current &&
-        !refs.itemTypeInputRef.current.contains(event.target as Node)
-      ) {
-        // Don't hide suggestions here since they're handled differently
-      }
-    };
+  // Use shared hook for click-outside detection on suggestions
+  useClickOutside(
+    [refs.itemTypeSuggestionsRef, refs.itemTypeInputRef],
+    () => {
+      // Don't hide suggestions here since they're handled differently
+    },
+    state.showItemTypeSuggestions
+  );
 
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [refs]);
-
-  if (!isOpen || !wizardRoom) return null;
+  if (!wizardRoom) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 shadow-xl max-w-lg w-full mx-4">
+    <ModalWrapper isOpen={isOpen} onClose={onClose} maxWidth="max-w-lg">
         {step === "question" && (
           <>
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
@@ -308,7 +301,6 @@ export default function AssetWizardModal({
             </form>
           </>
         )}
-      </div>
-    </div>
+    </ModalWrapper>
   );
 }

@@ -13,6 +13,7 @@ import {
   useRegisterManager,
   useCSVOperations,
   useOwnershipHandler,
+  useClickOutside,
 } from "~/hooks";
 import RegisterEditingView from "~/components/RegisterEditingView";
 import RegisterListView from "~/components/RegisterListView";
@@ -100,30 +101,19 @@ export default function Home() {
     }
   }, [registers, searchParams, setSearchParams, setEditingIndex]);
 
-  // Click outside handler
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        suggestionsRef.current &&
-        !suggestionsRef.current.contains(event.target as Node) &&
-        inputRef.current &&
-        !inputRef.current.contains(event.target as Node)
-      ) {
-        setShowSuggestions(false);
-      }
-      if (
-        assetWizard.refs.itemTypeSuggestionsRef.current &&
-        !assetWizard.refs.itemTypeSuggestionsRef.current.contains(event.target as Node) &&
-        assetWizard.refs.itemTypeInputRef.current &&
-        !assetWizard.refs.itemTypeInputRef.current.contains(event.target as Node)
-      ) {
-        assetWizard.actions.hideItemTypeSuggestions();
-      }
-    };
+  // Click outside handler for site address suggestions
+  useClickOutside(
+    [suggestionsRef, inputRef],
+    () => setShowSuggestions(false),
+    showSuggestions
+  );
 
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [assetWizard.actions, assetWizard.refs.itemTypeInputRef, assetWizard.refs.itemTypeSuggestionsRef]);
+  // Click outside handler for asset wizard item type suggestions
+  useClickOutside(
+    [assetWizard.refs.itemTypeSuggestionsRef, assetWizard.refs.itemTypeInputRef],
+    () => assetWizard.actions.hideItemTypeSuggestions(),
+    assetWizard.state.showItemTypeSuggestions
+  );
 
   // Drawing helpers
   const getRelativePosition = (e: React.MouseEvent): Point => {

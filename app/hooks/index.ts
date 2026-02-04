@@ -8,3 +8,4 @@ export { useDrawingCanvas, type UseDrawingCanvas, type DrawingCanvasState } from
 export { useRegisterManager, type UseRegisterManagerReturn } from "./useRegisterManager";
 export { useCSVOperations, type UseCSVOperationsReturn } from "./useCSVOperations";
 export { useOwnershipHandler, type UseOwnershipHandlerReturn } from "./useOwnershipHandler";
+export { useClickOutside } from "./useClickOutside";
