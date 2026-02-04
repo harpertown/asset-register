@@ -1,7 +1,7 @@
 ================================================================================
                         ASSET REGISTER - CONTINUITY DOCUMENT
 ================================================================================
-Last Updated: 2026-01-31
+Last Updated: 2026-01-31 (Refactoring Phase)
 Maintainer: [Your Name Here]
 
 ================================================================================
@@ -14,7 +14,7 @@ a RESTful API.
 
 Tech Stack:
 - Backend: Cloudflare Workers (TypeScript)
-- Frontend: React with React Router
+- Frontend: React with React Router 7.9.6
 - Build Tool: Vite
 - Database: SQLite (via Cloudflare D1)
 - Configuration: wrangler.json, tsconfig files
@@ -35,19 +35,43 @@ Tech Stack:
 ├── README.md               # Project documentation
 ├── CONTINUITY.TXT          # This file
 ├── migrations/             # Database migrations
-│   └── 0001_initial_schema.sql
+│   ├── 0001_initial_schema.sql
+│   ├── 0002_add_asset_fields.sql
+│   └── 0003_add_depreciation_fields.sql
 ├── app/                    # Application source
 │   ├── app.css             # Global styles
 │   ├── root.tsx            # App root component
 │   ├── entry.server.tsx    # Server entry point
 │   ├── routes.ts           # Route definitions
+│   ├── components/         # React components (modular UI pieces)
+│   ├── constants/          # [NEW] Shared constants
+│   │   ├── index.ts        # Barrel export
+│   │   ├── assetTypes.ts   # IRD_ASSET_TYPES, ASSET_CATEGORIES, MOCK_ADDRESSES
+│   │   └── colors.ts       # COLORS array for room highlighting
+│   ├── hooks/              # [NEW] Custom React hooks
+│   │   ├── index.ts        # Barrel export
+│   │   ├── useAssetWizard.ts    # Asset creation/editing wizard state
+│   │   ├── useOwnershipWizard.ts # Ownership questions wizard state
+│   │   ├── useImportWizard.ts   # CSV import wizard state
+│   │   └── useDrawingCanvas.ts  # Drawing tool state
 │   ├── routes/             # Route handlers
-│   │   ├── home.tsx        # Home page route
+│   │   ├── home.tsx        # Home page route (2700+ lines, needs refactoring)
+│   │   ├── transactions.tsx # FY Working/Register views (696 lines)
 │   │   └── api.registers.ts # API route for registers
+│   ├── services/           # API and business logic services
+│   │   ├── api.ts          # Main API service
+│   │   ├── depreciationService.ts # Depreciation calculations
+│   │   └── registerApi.ts  # Register-specific API
+│   ├── types/              # TypeScript type definitions
+│   │   ├── index.ts        # Main types (Asset, Room, Register, etc.)
+│   │   └── assetTypes.ts   # Asset-specific types
+│   ├── utils/              # [NEW] Shared utility functions
+│   │   ├── index.ts        # Barrel export
+│   │   ├── currency.ts     # formatCurrency(), currencyCellStyle
+│   │   ├── dates.ts        # calculateFinancialPeriod(), formatDate(), parseDate()
+│   │   └── csv.ts          # parseCSV(), parseCSVLine(), generateCSV()
 │   └── welcome/            # Welcome page component
-│       ├── welcome.tsx
-│       ├── logo-dark.svg
-│       └── logo-light.svg
+│       └── welcome.tsx
 └── workers/
     └── app.ts              # Worker entry point
 
@@ -149,7 +173,29 @@ Check app/routes/api.registers.ts for complete API documentation.
                            KNOWN ISSUES / TODOS
 ================================================================================
 
-[Add any known issues, limitations, or future work here]
+REFACTORING STATUS (In Progress):
+---------------------------------
+The codebase was identified as having oversized files. A refactoring effort
+is underway to improve maintainability:
+
+[x] Step 1: Extract shared utility functions (~/utils/)
+[x] Step 2: Extract constants to /app/constants/
+[x] Step 3: Fix transactions.tsx imports (now 696 lines, down from 790)
+[x] Step 4: Update home.tsx to use shared constants (now 2726 lines, down from 2866)
+[x] Step 5: Create custom hooks (~/hooks/) - hooks created, not yet integrated
+[ ] Step 6: Integrate hooks into home.tsx - NEXT STEP
+[ ] Step 7: Create view components to further reduce home.tsx
+
+TARGET: Reduce home.tsx from 2700+ lines to ~500-700 lines
+
+HOME.TSX REMAINING WORK:
+- Replace ~15 asset wizard useState hooks with useAssetWizard()
+- Replace ~8 ownership wizard useState hooks with useOwnershipWizard()
+- Replace ~3 import wizard useState hooks with useImportWizard()
+- Replace ~6 drawing canvas useState hooks with useDrawingCanvas()
+- Extract renderShape() and related functions to SitePlanRenderer component
+- Extract depreciation calculation to use depreciationService
+- Extract CSV parsing to use ~/utils/csv.ts
 
 ================================================================================
                             EMERGENCY CONTACTS

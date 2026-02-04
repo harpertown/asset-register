@@ -5,6 +5,7 @@ import { apiService } from "~/services/api";
 import type { Register, Room, Asset, Point, Tool, WizardStep, OwnershipWizardStep } from "~/types";
 import { IRD_ASSET_TYPES, ASSET_CATEGORIES, MOCK_ADDRESSES, COLORS } from "~/constants";
 import { formatCurrency } from "~/utils";
+import { useAssetWizard, useOwnershipWizard, useImportWizard, useDrawingCanvas } from "~/hooks";
 import AddressInput from "~/components/AddressInput";
 import SitePlanCanvas from "~/components/SitePlanCanvas";
 import DrawingToolbar from "~/components/DrawingToolbar";
