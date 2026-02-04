@@ -63,19 +63,8 @@ export default function Home() {
 	const [buildingsValue, setBuildingsValue] = useState("");
 	const [buildingsPurchaseDate, setBuildingsPurchaseDate] = useState("");
 
-	// Asset wizard state
-	const [assetWizardRoomId, setAssetWizardRoomId] = useState<string | null>(null);
-	const [assetWizardStep, setAssetWizardStep] = useState<WizardStep>("question");
-	const [newAssetItemType, setNewAssetItemType] = useState("");
-	const [itemTypeSuggestions, setItemTypeSuggestions] = useState<string[]>([]);
-	const [showItemTypeSuggestions, setShowItemTypeSuggestions] = useState(false);
-	const [newAssetName, setNewAssetName] = useState("");
-	const [newAssetId, setNewAssetId] = useState("");
-	const [newAssetSerialNumber, setNewAssetSerialNumber] = useState("");
-	const [newAssetPurchasePrice, setNewAssetPurchasePrice] = useState("");
-	const [newAssetPurchaseDate, setNewAssetPurchaseDate] = useState("");
-	const [newAssetPhoto, setNewAssetPhoto] = useState<string | null>(null);
-	const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
+	// Asset wizard state (using custom hook)
+	const assetWizard = useAssetWizard();
 
 	// Depreciation calculation state
 	const [showDepreciationModal, setShowDepreciationModal] = useState(false);
@@ -91,8 +80,7 @@ export default function Home() {
 	const suggestionsRef = useRef<HTMLUListElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const canvasRef = useRef<HTMLDivElement>(null);
-	const itemTypeInputRef = useRef<HTMLInputElement>(null);
-	const itemTypeSuggestionsRef = useRef<HTMLUListElement>(null);
+	// itemTypeInputRef and itemTypeSuggestionsRef are now in assetWizard.refs
 
 	// Load registers from API when authenticated
 	const loadRegisters = useCallback(async () => {
@@ -137,18 +125,18 @@ export default function Home() {
 				setShowSuggestions(false);
 			}
 			if (
-				itemTypeSuggestionsRef.current &&
-				!itemTypeSuggestionsRef.current.contains(event.target as Node) &&
-				itemTypeInputRef.current &&
-				!itemTypeInputRef.current.contains(event.target as Node)
+				assetWizard.refs.itemTypeSuggestionsRef.current &&
+				!assetWizard.refs.itemTypeSuggestionsRef.current.contains(event.target as Node) &&
+				assetWizard.refs.itemTypeInputRef.current &&
+				!assetWizard.refs.itemTypeInputRef.current.contains(event.target as Node)
 			) {
-				setShowItemTypeSuggestions(false);
+				assetWizard.actions.hideItemTypeSuggestions();
 			}
 		};
 
 		document.addEventListener("mousedown", handleClickOutside);
 		return () => document.removeEventListener("mousedown", handleClickOutside);
-	}, []);
+	}, [assetWizard.actions, assetWizard.refs.itemTypeInputRef, assetWizard.refs.itemTypeSuggestionsRef]);
 
 	const getRelativePosition = (e: React.MouseEvent): Point => {
 		if (!canvasRef.current) return { x: 0, y: 0 };
@@ -253,23 +241,11 @@ export default function Home() {
 	};
 
 	const handleItemTypeChange = (value: string) => {
-		setNewAssetItemType(value);
-		if (value.length >= 1) {
-			const filtered = IRD_ASSET_TYPES.filter((type) =>
-				type.toLowerCase().includes(value.toLowerCase())
-			);
-			setItemTypeSuggestions(filtered);
-			setShowItemTypeSuggestions(filtered.length > 0);
-		} else {
-			setItemTypeSuggestions([]);
-			setShowItemTypeSuggestions(false);
-		}
+		assetWizard.actions.setItemType(value);
 	};
 
 	const handleSelectItemType = (type: string) => {
-		setNewAssetItemType(type);
-		setShowItemTypeSuggestions(false);
-		setItemTypeSuggestions([]);
+		assetWizard.actions.selectItemTypeSuggestion(type);
 	};
 
 	const handleSelectSuggestion = (suggestion: string) => {
@@ -737,26 +713,16 @@ export default function Home() {
 	};
 
 	const openAssetWizard = (roomId: string) => {
-		setAssetWizardRoomId(roomId);
-		setAssetWizardStep("addItem");
+		assetWizard.actions.openWizard(roomId);
+		assetWizard.actions.setStep("addItem");
 	};
 
 	const closeAssetWizard = () => {
-		setAssetWizardRoomId(null);
-		setAssetWizardStep("question");
-		setNewAssetItemType("");
-		setItemTypeSuggestions([]);
-		setShowItemTypeSuggestions(false);
-		setNewAssetName("");
-		setNewAssetSerialNumber("");
-		setNewAssetPurchasePrice("");
-		setNewAssetPurchaseDate("");
-		setNewAssetPhoto(null);
-		setNewAssetId("");
+		assetWizard.actions.closeWizard();
 	};
 
 	const handleAssetWizardYes = () => {
-		setAssetWizardStep("addItem");
+		assetWizard.actions.setStep("addItem");
 	};
 
 	const handleAssetWizardNo = () => {
@@ -765,14 +731,15 @@ export default function Home() {
 
 	const handleAddAsset = async (e: React.FormEvent) => {
 		e.preventDefault();
-		if (assetWizardRoomId && newAssetName.trim() && editingIndex !== null) {
+		const { roomId, name, assetId: formAssetId, itemType, serialNumber, purchasePrice, purchaseDate, photo, editingAssetId } = assetWizard.state;
+		if (roomId && name.trim() && editingIndex !== null) {
 			const updatedRegisters = [...registers];
 			const roomIndex = updatedRegisters[editingIndex].rooms.findIndex(
-				(r) => r.id === assetWizardRoomId
+				(r) => r.id === roomId
 			);
 			if (roomIndex !== -1) {
-				const price = parseFloat(newAssetPurchasePrice) || 0;
-				const isIncomplete = !newAssetPurchasePrice || price === 0 || !newAssetPurchaseDate;
+				const price = parseFloat(purchasePrice) || 0;
+				const isIncomplete = !purchasePrice || price === 0 || !purchaseDate;
 
 				if (editingAssetId) {
 					// Update existing asset
@@ -782,13 +749,13 @@ export default function Home() {
 					if (assetIndex !== -1) {
 						const updatedAsset = {
 							...updatedRegisters[editingIndex].rooms[roomIndex].assets[assetIndex],
-							assetId: newAssetId.trim() || undefined,
-							itemType: newAssetItemType.trim() || "",
-							name: newAssetName.trim(),
-							serialNumber: newAssetSerialNumber.trim() || "",
+							assetId: formAssetId.trim() || undefined,
+							itemType: itemType.trim() || "",
+							name: name.trim(),
+							serialNumber: serialNumber.trim() || "",
 							purchasePrice: price,
-							purchaseDate: newAssetPurchaseDate || "",
-							photo: newAssetPhoto || undefined,
+							purchaseDate: purchaseDate || "",
+							photo: photo || undefined,
 							incomplete: isIncomplete,
 						};
 						updatedRegisters[editingIndex].rooms[roomIndex].assets[assetIndex] = updatedAsset;
@@ -813,16 +780,16 @@ export default function Home() {
 					}
 				} else {
 					// Create new asset
-					const assetId = `asset-${Date.now()}`;
+					const newAssetId = `asset-${Date.now()}`;
 					const newAsset = {
-						id: assetId,
-						assetId: newAssetId.trim() || undefined,
-						itemType: newAssetItemType.trim() || "",
-						name: newAssetName.trim(),
-						serialNumber: newAssetSerialNumber.trim() || "",
+						id: newAssetId,
+						assetId: formAssetId.trim() || undefined,
+						itemType: itemType.trim() || "",
+						name: name.trim(),
+						serialNumber: serialNumber.trim() || "",
 						purchasePrice: price,
-						purchaseDate: newAssetPurchaseDate || "",
-						photo: newAssetPhoto || undefined,
+						purchaseDate: purchaseDate || "",
+						photo: photo || undefined,
 						incomplete: isIncomplete,
 					};
 
@@ -832,8 +799,8 @@ export default function Home() {
 					// Sync to API
 					try {
 						await apiService.createAsset({
-							assetGroupId: assetWizardRoomId,
-							id: assetId,
+							assetGroupId: roomId,
+							id: newAssetId,
 							assetId: newAsset.assetId,
 							itemType: newAsset.itemType,
 							name: newAsset.name,
@@ -848,17 +815,17 @@ export default function Home() {
 					}
 				}
 			}
-			// Reset form but stay in wizard to add more items
-			setNewAssetItemType("");
-			setItemTypeSuggestions([]);
-			setShowItemTypeSuggestions(false);
-			setNewAssetName("");
-			setNewAssetId("");
-			setNewAssetSerialNumber("");
-			setNewAssetPurchasePrice("");
-			setNewAssetPurchaseDate("");
-			setNewAssetPhoto(null);
-			setEditingAssetId(null);
+			// Reset form but stay in wizard to add more items - use hook's setField for each
+			assetWizard.actions.setField("itemType", "");
+			assetWizard.actions.setField("itemTypeSuggestions", []);
+			assetWizard.actions.setField("showItemTypeSuggestions", false);
+			assetWizard.actions.setField("name", "");
+			assetWizard.actions.setField("assetId", "");
+			assetWizard.actions.setField("serialNumber", "");
+			assetWizard.actions.setField("purchasePrice", "");
+			assetWizard.actions.setField("purchaseDate", "");
+			assetWizard.actions.setField("photo", null);
+			assetWizard.actions.setField("editingAssetId", null);
 		}
 	};
 
@@ -867,7 +834,7 @@ export default function Home() {
 		if (file) {
 			const reader = new FileReader();
 			reader.onloadend = () => {
-				setNewAssetPhoto(reader.result as string);
+				assetWizard.actions.setField("photo", reader.result as string);
 			};
 			reader.readAsDataURL(file);
 		}
@@ -1518,8 +1485,8 @@ export default function Home() {
 	// Editing view
 	if (editingIndex !== null) {
 		const register = registers[editingIndex];
-		const wizardRoom = assetWizardRoomId
-			? register.rooms.find((r) => r.id === assetWizardRoomId)
+		const wizardRoom = assetWizard.state.roomId
+			? register.rooms.find((r) => r.id === assetWizard.state.roomId)
 			: null;
 
 		return (
@@ -2000,10 +1967,10 @@ export default function Home() {
 						)}
 
 						{/* Asset Wizard Modal */}
-						{assetWizardRoomId && wizardRoom && (
+						{assetWizard.isOpen && wizardRoom && (
 							<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
 								<div className="bg-white rounded-lg p-6 shadow-xl max-w-lg w-full mx-4">
-									{assetWizardStep === "question" && (
+									{assetWizard.state.step === "question" && (
 										<>
 											<h3 className="text-lg font-semibold text-gray-900 mb-4">
 												Add Assets to {wizardRoom.name}
@@ -2033,7 +2000,7 @@ export default function Home() {
 										</>
 									)}
 
-									{assetWizardStep === "addItem" && (
+									{assetWizard.state.step === "addItem" && (
 										<>
 											<h3 className="text-lg font-semibold text-gray-900 mb-4">
 												Add Assets to {wizardRoom.name}
@@ -2044,25 +2011,25 @@ export default function Home() {
 														Item Type (IRD Depreciation Guide)
 													</label>
 													<input
-														ref={itemTypeInputRef}
+														ref={assetWizard.refs.itemTypeInputRef}
 														type="text"
-														value={newAssetItemType}
+														value={assetWizard.state.itemType}
 														onChange={(e) => handleItemTypeChange(e.target.value)}
 														onFocus={() => {
-															if (newAssetItemType.length >= 1 && itemTypeSuggestions.length > 0) {
-																setShowItemTypeSuggestions(true);
+															if (assetWizard.state.itemType.length >= 1 && assetWizard.state.itemTypeSuggestions.length > 0) {
+																assetWizard.actions.setField("showItemTypeSuggestions", true);
 															}
 														}}
 														placeholder="Start typing to search..."
 														className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-gray-900"
 														autoFocus
 													/>
-													{showItemTypeSuggestions && itemTypeSuggestions.length > 0 && (
+													{assetWizard.state.showItemTypeSuggestions && assetWizard.state.itemTypeSuggestions.length > 0 && (
 														<ul
-															ref={itemTypeSuggestionsRef}
+															ref={assetWizard.refs.itemTypeSuggestionsRef}
 															className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto"
 														>
-															{itemTypeSuggestions.map((type, index) => (
+															{assetWizard.state.itemTypeSuggestions.map((type, index) => (
 																<li
 																	key={index}
 																	onClick={() => handleSelectItemType(type)}
@@ -2080,8 +2047,8 @@ export default function Home() {
 													</label>
 													<input
 														type="text"
-														value={newAssetName}
-														onChange={(e) => setNewAssetName(e.target.value)}
+														value={assetWizard.state.name}
+														onChange={(e) => assetWizard.actions.setField("name", e.target.value)}
 														placeholder="e.g., Dell XPS 15, Standing Desk..."
 														className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-gray-900"
 													/>
@@ -2092,8 +2059,8 @@ export default function Home() {
 													</label>
 													<input
 														type="text"
-														value={newAssetId}
-														onChange={(e) => setNewAssetId(e.target.value)}
+														value={assetWizard.state.assetId}
+														onChange={(e) => assetWizard.actions.setField("assetId", e.target.value)}
 														placeholder="e.g., ASSET-001, INV-123..."
 														className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-gray-900"
 													/>
@@ -2104,8 +2071,8 @@ export default function Home() {
 													</label>
 													<input
 														type="text"
-														value={newAssetSerialNumber}
-														onChange={(e) => setNewAssetSerialNumber(e.target.value)}
+														value={assetWizard.state.serialNumber}
+														onChange={(e) => assetWizard.actions.setField("serialNumber", e.target.value)}
 														placeholder="e.g., SN123456789"
 														className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-gray-900"
 													/>
@@ -2116,8 +2083,8 @@ export default function Home() {
 													</label>
 													<input
 														type="number"
-														value={newAssetPurchasePrice}
-														onChange={(e) => setNewAssetPurchasePrice(e.target.value)}
+														value={assetWizard.state.purchasePrice}
+														onChange={(e) => assetWizard.actions.setField("purchasePrice", e.target.value)}
 														placeholder="0.00"
 														min="0"
 														step="0.01"
@@ -2130,8 +2097,8 @@ export default function Home() {
 													</label>
 													<input
 														type="date"
-														value={newAssetPurchaseDate}
-														onChange={(e) => setNewAssetPurchaseDate(e.target.value)}
+														value={assetWizard.state.purchaseDate}
+														onChange={(e) => assetWizard.actions.setField("purchaseDate", e.target.value)}
 														className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-gray-900"
 													/>
 												</div>
@@ -2139,16 +2106,16 @@ export default function Home() {
 													<label className="block text-sm font-medium text-gray-700 mb-1">
 														Photo (optional)
 													</label>
-													{newAssetPhoto ? (
+													{assetWizard.state.photo ? (
 														<div className="flex items-center gap-3">
 															<img
-																src={newAssetPhoto}
+																src={assetWizard.state.photo}
 																alt="Asset preview"
 																className="w-16 h-16 object-cover rounded-lg border border-gray-300"
 															/>
 															<button
 																type="button"
-																onClick={() => setNewAssetPhoto(null)}
+																onClick={() => assetWizard.actions.setField("photo", null)}
 																className="text-red-600 hover:text-red-800 p-1"
 																title="Remove photo"
 															>
@@ -2176,7 +2143,7 @@ export default function Home() {
 												</div>
 
 												{/* Show already added assets */}
-												{wizardRoom.assets.length > 0 && !editingAssetId && (
+												{wizardRoom.assets.length > 0 && !assetWizard.isEditing && (
 													<div className="border-t pt-4 mt-2">
 														<p className="text-sm font-medium text-gray-700 mb-2">
 															Assets added ({wizardRoom.assets.length}):
@@ -2193,14 +2160,16 @@ export default function Home() {
 																		<button
 																			type="button"
 																			onClick={() => {
-																				setNewAssetItemType(asset.itemType || "");
-																				setNewAssetName(asset.name);
-																				setNewAssetId(asset.assetId || "");
-																				setNewAssetSerialNumber(asset.serialNumber || "");
-																				setNewAssetPurchasePrice(asset.purchasePrice ? asset.purchasePrice.toString() : "");
-																				setNewAssetPurchaseDate(asset.purchaseDate || "");
-																				setNewAssetPhoto(asset.photo || null);
-																				setEditingAssetId(asset.id);
+																				assetWizard.actions.populateForEdit({
+																					id: asset.id,
+																					itemType: asset.itemType || "",
+																					name: asset.name,
+																					assetId: asset.assetId,
+																					serialNumber: asset.serialNumber || "",
+																					purchasePrice: asset.purchasePrice,
+																					purchaseDate: asset.purchaseDate || "",
+																					photo: asset.photo,
+																				});
 																			}}
 																			className="text-blue-500 hover:text-blue-700 text-xs"
 																		>
@@ -2226,7 +2195,7 @@ export default function Home() {
 													</button>
 													<button
 														type="submit"
-														disabled={!newAssetName.trim()}
+														disabled={!assetWizard.state.name.trim()}
 														className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
 														title="Save asset"
 													>
@@ -2327,7 +2296,7 @@ export default function Home() {
 												</div>
 											</div>
 											{/* Assets list */}
-											{room.assets.length > 0 && !assetWizardRoomId && (
+											{room.assets.length > 0 && !assetWizard.isOpen && (
 												<ul className="px-3 pb-2 space-y-1">
 													{room.assets.map((asset) => {
 														const isIncomplete = asset.incomplete;
@@ -2341,15 +2310,17 @@ export default function Home() {
 																	// Collapsed view for incomplete assets (no dropdown)
 																	<div
 																		onClick={() => {
-																			setNewAssetItemType(asset.itemType || "");
-																			setNewAssetName(asset.name);
-																			setNewAssetId(asset.assetId || "");
-																			setNewAssetSerialNumber(asset.serialNumber || "");
-																			setNewAssetPurchasePrice(asset.purchasePrice ? asset.purchasePrice.toString() : "");
-																			setNewAssetPurchaseDate(asset.purchaseDate || "");
-																			setNewAssetPhoto(asset.photo || null);
-																			setEditingAssetId(asset.id);
-																			openAssetWizard(room.id);
+																			assetWizard.actions.openWizard(room.id);
+																			assetWizard.actions.populateForEdit({
+																				id: asset.id,
+																				itemType: asset.itemType || "",
+																				name: asset.name,
+																				assetId: asset.assetId,
+																				serialNumber: asset.serialNumber || "",
+																				purchasePrice: asset.purchasePrice,
+																				purchaseDate: asset.purchaseDate || "",
+																				photo: asset.photo,
+																			});
 																		}}
 																		className="flex items-center justify-between cursor-pointer hover:bg-amber-100 transition-colors"
 																	>
@@ -2384,15 +2355,17 @@ export default function Home() {
 																	// Full view for complete assets
 																	<div
 																		onClick={() => {
-																			setNewAssetItemType(asset.itemType || "");
-																			setNewAssetName(asset.name);
-																			setNewAssetId(asset.assetId || "");
-																			setNewAssetSerialNumber(asset.serialNumber || "");
-																			setNewAssetPurchasePrice(asset.purchasePrice ? asset.purchasePrice.toString() : "");
-																			setNewAssetPurchaseDate(asset.purchaseDate || "");
-																			setNewAssetPhoto(asset.photo || null);
-																			setEditingAssetId(asset.id);
-																			openAssetWizard(room.id);
+																			assetWizard.actions.openWizard(room.id);
+																			assetWizard.actions.populateForEdit({
+																				id: asset.id,
+																				itemType: asset.itemType || "",
+																				name: asset.name,
+																				assetId: asset.assetId,
+																				serialNumber: asset.serialNumber || "",
+																				purchasePrice: asset.purchasePrice,
+																				purchaseDate: asset.purchaseDate || "",
+																				photo: asset.photo,
+																			});
 																		}}
 																		className="flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
 																	>
