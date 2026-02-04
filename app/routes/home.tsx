@@ -63,9 +63,9 @@ export default function Home() {
 	const [financialYear, setFinancialYear] = useState(new Date().getFullYear().toString());
 	const [suggestions, setSuggestions] = useState<string[]>([]);
 	const [showSuggestions, setShowSuggestions] = useState(false);
-	const [isDrawing, setIsDrawing] = useState(false);
-	const [startPoint, setStartPoint] = useState<Point | null>(null);
-	const [currentPath, setCurrentPath] = useState<Point[]>([]);
+	
+	// Drawing canvas state (using custom hook)
+	const drawingCanvas = useDrawingCanvas();
 
 	const inputRef = useRef<HTMLInputElement>(null);
 	const suggestionsRef = useRef<HTMLUListElement>(null);
@@ -141,16 +141,15 @@ export default function Home() {
 	const handleMouseDown = (e: React.MouseEvent) => {
 		if (!wizardActive || namingRoom) return;
 		const pos = getRelativePosition(e);
-		setIsDrawing(true);
-		setStartPoint(pos);
-		if (selectedTool === "pen") {
-			setCurrentPath([pos]);
-		}
+		drawingCanvas.actions.startDrawing(pos);
 	};
 
 	const handleMouseMove = (e: React.MouseEvent) => {
+		const { isDrawing, startPoint, currentPath } = drawingCanvas.state;
 		if (!isDrawing || !startPoint || !wizardActive) return;
 		const pos = getRelativePosition(e);
+
+		drawingCanvas.actions.continueDrawing(pos);
 
 		if (selectedTool === "rectangle") {
 			setPreviewShape({
@@ -179,7 +178,6 @@ export default function Home() {
 				circle: { cx: startPoint.x, cy: startPoint.y, radius },
 			});
 		} else if (selectedTool === "pen") {
-			setCurrentPath((prev) => [...prev, pos]);
 			setPreviewShape({
 				id: "preview",
 				name: "",
@@ -192,8 +190,9 @@ export default function Home() {
 	};
 
 	const handleMouseUp = () => {
+		const { isDrawing } = drawingCanvas.state;
 		if (!isDrawing || !previewShape) {
-			setIsDrawing(false);
+			drawingCanvas.actions.stopDrawing();
 			return;
 		}
 
@@ -211,9 +210,7 @@ export default function Home() {
 			setNamingRoom({ ...previewShape, id: Date.now().toString() });
 		}
 
-		setIsDrawing(false);
-		setStartPoint(null);
-		setCurrentPath([]);
+		drawingCanvas.actions.stopDrawing();
 		setPreviewShape(null);
 	};
 
