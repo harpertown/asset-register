@@ -47,10 +47,8 @@ export default function Home() {
 	// Incomplete section state
 	const [incompleteSectionExpanded, setIncompleteSectionExpanded] = useState(false);
 
-	// CSV Import state
-	const [showImportWizard, setShowImportWizard] = useState(false);
-	const [importedAssets, setImportedAssets] = useState<any[]>([]);
-	const [currentImportIndex, setCurrentImportIndex] = useState(0);
+	// CSV Import state (using custom hook)
+	const importWizard = useImportWizard();
 	const importFileInputRef = useRef<HTMLInputElement>(null);
 
 	// Site ownership wizard state (using custom hook)
@@ -398,9 +396,7 @@ export default function Home() {
 			const parsedAssets = parseCSV(text);
 
 			if (parsedAssets.length > 0) {
-				setImportedAssets(parsedAssets);
-				setCurrentImportIndex(0);
-				setShowImportWizard(true);
+				importWizard.actions.openWizard(parsedAssets);
 			}
 		};
 		reader.readAsText(file);
@@ -525,8 +521,8 @@ export default function Home() {
 	};
 
 	const handleImportNext = async () => {
-		if (currentImportIndex < importedAssets.length - 1) {
-			setCurrentImportIndex(currentImportIndex + 1);
+		if (!importWizard.isLastAsset) {
+			importWizard.actions.nextAsset();
 		} else {
 			// All assets reviewed, create the import group
 			await createImportGroup();
@@ -534,8 +530,8 @@ export default function Home() {
 	};
 
 	const handleImportSkip = () => {
-		if (currentImportIndex < importedAssets.length - 1) {
-			setCurrentImportIndex(currentImportIndex + 1);
+		if (!importWizard.isLastAsset) {
+			importWizard.actions.nextAsset();
 		} else {
 			// All assets reviewed, create the import group
 			createImportGroup();
@@ -543,9 +539,7 @@ export default function Home() {
 	};
 
 	const handleImportEdit = (editedAsset: any) => {
-		const updatedAssets = [...importedAssets];
-		updatedAssets[currentImportIndex] = editedAsset;
-		setImportedAssets(updatedAssets);
+		importWizard.actions.updateCurrentAsset(editedAsset);
 	};
 
 	const createImportGroup = async () => {
@@ -583,7 +577,7 @@ export default function Home() {
 				});
 
 				// Create assets
-				for (const asset of importedAssets) {
+				for (const asset of importWizard.state.importedAssets) {
 					const assetId = `asset-${Date.now()}-${Math.random()}`;
 					const newAsset = {
 						id: assetId,
@@ -626,15 +620,11 @@ export default function Home() {
 		}
 
 		// Close wizard
-		setShowImportWizard(false);
-		setImportedAssets([]);
-		setCurrentImportIndex(0);
+		importWizard.actions.closeWizard();
 	};
 
 	const closeImportWizard = () => {
-		setShowImportWizard(false);
-		setImportedAssets([]);
-		setCurrentImportIndex(0);
+		importWizard.actions.closeWizard();
 	};
 
 	const handleSaveRoom = async (e: React.FormEvent) => {
@@ -1896,12 +1886,12 @@ export default function Home() {
 						)}
 
 						{/* Import Wizard Modal */}
-						{showImportWizard && importedAssets.length > 0 && (
+						{importWizard.state.isOpen && importWizard.hasAssets && (
 							<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
 								<div className="bg-white rounded-lg p-6 shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
 									<div className="flex justify-between items-center mb-6">
 										<h3 className="text-lg font-semibold text-gray-900">
-											Import Assets ({currentImportIndex + 1} of {importedAssets.length})
+											Import Assets ({importWizard.state.currentIndex + 1} of {importWizard.totalAssets})
 										</h3>
 										<button
 											onClick={closeImportWizard}
@@ -1914,11 +1904,11 @@ export default function Home() {
 									</div>
 
 									<ImportAssetForm
-										asset={importedAssets[currentImportIndex]}
+										asset={importWizard.currentAsset}
 										onSave={handleImportEdit}
 										onNext={handleImportNext}
 										onSkip={handleImportSkip}
-										isLast={currentImportIndex === importedAssets.length - 1}
+										isLast={importWizard.isLastAsset}
 									/>
 								</div>
 							</div>
