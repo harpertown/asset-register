@@ -1,8 +1,17 @@
 export type Tool = "rectangle" | "circle" | "pen";
+export type DrawingTool = "select" | "rectangle" | "circle" | "pen";
 
 export interface Point {
   x: number;
   y: number;
+}
+
+export interface DrawingShape {
+  tool: Tool;
+  color: string;
+  rect?: { x: number; y: number; width: number; height: number };
+  circle?: { cx: number; cy: number; radius: number };
+  path?: Point[];
 }
 
 export interface Asset {
