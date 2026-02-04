@@ -1362,102 +1362,40 @@ export default function Home() {
 						)}
 
 						{/* Room naming modal */}
-						{namingRoom && (
-							<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-								<form
-									onSubmit={handleSaveRoom}
-									className="bg-white rounded-lg p-6 shadow-xl flex flex-col gap-4"
-								>
-									<h3 className="text-lg font-semibold text-gray-900">Name this room</h3>
-									<input
-										type="text"
-										value={roomName}
-										onChange={(e) => setRoomName(e.target.value)}
-										placeholder="e.g., Living Room, Kitchen..."
-										className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-gray-900 w-64"
-										autoFocus
-									/>
-									<div className="flex gap-2 justify-end">
-										<button
-											type="button"
-											onClick={() => {
-												setNamingRoom(null);
-												setRoomName("");
-											}}
-											className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-										>
-											Cancel
-										</button>
-										<button
-											type="submit"
-											className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-										>
-											Save Room
-										</button>
-									</div>
-								</form>
-							</div>
-						)}
+						<RoomNamingModal
+							namingRoom={namingRoom}
+							roomName={roomName}
+							onRoomNameChange={setRoomName}
+							onSave={handleSaveRoom}
+							onCancel={() => {
+								setNamingRoom(null);
+								setRoomName("");
+							}}
+						/>
 
 						{/* Import Wizard Modal */}
-						{importWizard.state.isOpen && importWizard.hasAssets && (
-							<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-								<div className="bg-white rounded-lg p-6 shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-									<div className="flex justify-between items-center mb-6">
-										<h3 className="text-lg font-semibold text-gray-900">
-											Import Assets ({importWizard.state.currentIndex + 1} of {importWizard.totalAssets})
-										</h3>
-										<button
-											onClick={closeImportWizard}
-											className="text-gray-400 hover:text-gray-600"
-										>
-											<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-											</svg>
-										</button>
-									</div>
-
-									<ImportAssetForm
-										asset={importWizard.currentAsset}
-										onSave={handleImportEdit}
-										onNext={handleImportNext}
-										onSkip={handleImportSkip}
-										isLast={importWizard.isLastAsset}
-									/>
-								</div>
-							</div>
-						)}
+						<ImportWizardModal
+							showImportWizard={importWizard.state.isOpen}
+							importedAssets={importWizard.state.importedAssets}
+							currentImportIndex={importWizard.state.currentIndex}
+							onClose={closeImportWizard}
+							onSave={handleImportEdit}
+							onNext={handleImportNext}
+							onSkip={handleImportSkip}
+							isLast={importWizard.isLastAsset}
+							onEdit={handleImportEdit}
+						/>
 
 						{/* Confirm Delete Room Modal */}
-						{confirmDeleteRoomId && (
-							<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-								<div className="bg-white rounded-lg p-6 shadow-xl max-w-sm w-full mx-4">
-									<h3 className="text-lg font-semibold text-gray-900 mb-4">
-										Are you sure?
-									</h3>
-									<p className="text-gray-600 mb-6">
-										This will remove the asset group "{register.rooms.find(r => r.id === confirmDeleteRoomId)?.name}" and all its assets. This action cannot be undone.
-									</p>
-									<div className="flex gap-3 justify-end">
-										<button
-											onClick={() => setConfirmDeleteRoomId(null)}
-											className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-										>
-											Cancel
-										</button>
-										<button
-											onClick={() => {
-												handleDeleteRoom(confirmDeleteRoomId);
-												setConfirmDeleteRoomId(null);
-											}}
-											className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-										>
-											Remove
-										</button>
-									</div>
-								</div>
-							</div>
-						)}
+						<ConfirmDeleteModal
+							confirmDeleteRoomId={confirmDeleteRoomId}
+							roomName={register.rooms.find(r => r.id === confirmDeleteRoomId)?.name ?? ""}
+							onConfirm={() => {
+								handleDeleteRoom(confirmDeleteRoomId!);
+								setConfirmDeleteRoomId(null);
+							}}
+							onCancel={() => setConfirmDeleteRoomId(null)}
+						/>
 
 						{/* Asset Wizard Modal */}
 						<AssetWizardModal
