@@ -472,7 +472,7 @@ export default function Home() {
 						itemType: asset.itemType || "",
 						name: asset.name,
 						serialNumber: asset.serialNumber || "",
-						purchasePrice: asset.purchasePrice,
+						purchasePrice: asset.purchasePrice ?? 0,
 						purchaseDate: asset.purchaseDate || "",
 						incomplete: asset.incomplete,
 						depnMethodAcc: asset.depnMethodAcc || undefined,
