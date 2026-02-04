@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router";
 import type { Route } from "./+types/home";
 import { apiService } from "~/services/api";
+import { calculateDepreciation } from "~/services/depreciationService";
+import type { DepreciationResult } from "~/services/depreciationService";
 import type { Register, Room, Asset, Point, Tool, WizardStep, OwnershipWizardStep } from "~/types";
 import { IRD_ASSET_TYPES, ASSET_CATEGORIES, MOCK_ADDRESSES, COLORS } from "~/constants";
 import { formatCurrency, parseCSVForImport } from "~/utils";
@@ -59,7 +61,7 @@ export default function Home() {
 
 	// Depreciation calculation state
 	const [showDepreciationModal, setShowDepreciationModal] = useState(false);
-	const [depreciationResults, setDepreciationResults] = useState<any[]>([]);
+	const [depreciationResults, setDepreciationResults] = useState<DepreciationResult[]>([]);
 	const [financialYear, setFinancialYear] = useState(new Date().getFullYear().toString());
 	const [suggestions, setSuggestions] = useState<string[]>([]);
 	const [showSuggestions, setShowSuggestions] = useState(false);
@@ -1117,95 +1119,6 @@ export default function Home() {
 
 		ownershipWizard.actions.closeWizard();
 		setWizardActive(true);
-	};
-
-	// Depreciation calculation functions
-	const calculateDepreciation = (asset: any, type: "working" | "register") => {
-		const purchasePrice = asset.purchasePrice || 0;
-		const purchaseDate = asset.purchaseDate ? new Date(asset.purchaseDate) : null;
-		const depnMethodAcc = asset.depnMethodAcc || "";
-		const depnRateAcc = asset.depnRateAcc || "";
-		const depnMethodTax = asset.depnMethodTax || "";
-		const depnRateTax = asset.depnRateTax || "";
-
-		if (!purchaseDate) {
-			return {
-				assetId: asset.assetId || "",
-				name: asset.name,
-				purchasePrice,
-				accDepreciation: 0,
-				taxDepreciation: 0,
-				bookValueAcc: purchasePrice,
-				bookValueTax: purchasePrice,
-				monthsHeld: 0,
-			};
-		}
-
-		const now = new Date();
-		const monthsHeld = Math.floor((now.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24 * 30));
-
-		// Parse depreciation rate (e.g., "2%" -> 0.02)
-		const parseRate = (rate: string) => {
-			if (!rate) return 0;
-			const parsed = parseFloat(rate.replace("%", ""));
-			return isNaN(parsed) ? 0 : parsed / 100;
-		};
-
-		const rateAcc = parseRate(depnRateAcc);
-		const rateTax = parseRate(depnRateTax);
-
-		// Calculate depreciation based on method
-		const calculateByMethod = (price: number, rate: number, method: string, months: number) => {
-			if (!method || method.toLowerCase() === "non-depreciable") {
-				return 0;
-			}
-
-			if (method.toLowerCase() === "low-value write-off") {
-				return price; // Full write-off in first year
-			}
-
-			if (method.toLowerCase().includes("straight-line")) {
-				// Straight-line: (Cost × Rate) / 12 × months
-				return (price * rate * months) / 12;
-			}
-
-			if (method.toLowerCase().includes("diminishing")) {
-				// Diminishing value: Book Value × Rate × (months / 12)
-				let bookValue = price;
-				let totalDepreciation = 0;
-				const years = months / 12;
-
-				for (let i = 0; i < years; i++) {
-					const yearlyDepreciation = bookValue * rate;
-					totalDepreciation += yearlyDepreciation;
-					bookValue -= yearlyDepreciation;
-				}
-
-				// Add partial year depreciation
-				const partialMonths = months % 12;
-				if (partialMonths > 0) {
-					totalDepreciation += bookValue * rate * (partialMonths / 12);
-				}
-
-				return totalDepreciation;
-			}
-
-			return 0;
-		};
-
-		const accDepreciation = calculateByMethod(purchasePrice, rateAcc, depnMethodAcc, monthsHeld);
-		const taxDepreciation = calculateByMethod(purchasePrice, rateTax, depnMethodTax, monthsHeld);
-
-		return {
-			assetId: asset.assetId || "",
-			name: asset.name,
-			purchasePrice,
-			accDepreciation,
-			taxDepreciation,
-			bookValueAcc: Math.max(0, purchasePrice - accDepreciation),
-			bookValueTax: Math.max(0, purchasePrice - taxDepreciation),
-			monthsHeld,
-		};
 	};
 
 	const handleFYWorking = () => {
