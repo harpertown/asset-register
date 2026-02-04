@@ -1460,188 +1460,29 @@ export default function Home() {
 
 						{/* Ownership Wizard Modal */}
 						{ownershipWizard.state.isOpen && (
-							<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-								<div className="bg-white rounded-lg p-6 shadow-xl max-w-md w-full mx-4">
-									{ownershipWizard.state.step === "questions" && (
-										<>
-											<h3 className="text-lg font-semibold text-gray-900 mb-6">
-												Site Ownership Questions
-											</h3>
-											
-											<div className="space-y-6">
-												<div>
-													<p className="text-gray-700 mb-3">
-														Do you own the land the site is on?
-													</p>
-													<div className="flex gap-3">
-														<button
-															onClick={() => ownershipWizard.actions.setOwnsLand(true)}
-															className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
-																ownershipWizard.state.ownsLand === true
-																	? "bg-blue-600 text-white"
-																	: "border border-gray-300 text-gray-700 hover:bg-gray-50"
-															}`}
-														>
-															Yes
-														</button>
-														<button
-															onClick={() => ownershipWizard.actions.setOwnsLand(false)}
-															className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
-																ownershipWizard.state.ownsLand === false
-																	? "bg-blue-600 text-white"
-																	: "border border-gray-300 text-gray-700 hover:bg-gray-50"
-															}`}
-														>
-															No
-														</button>
-													</div>
-												</div>
-
-												<div>
-													<p className="text-gray-700 mb-3">
-														Do you own any of the buildings (including leasing with an option to buy)?
-													</p>
-													<div className="flex gap-3">
-														<button
-															onClick={() => ownershipWizard.actions.setOwnsBuildings(true)}
-															className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
-																ownershipWizard.state.ownsBuildings === true
-																	? "bg-blue-600 text-white"
-																	: "border border-gray-300 text-gray-700 hover:bg-gray-50"
-															}`}
-														>
-															Yes
-														</button>
-														<button
-															onClick={() => ownershipWizard.actions.setOwnsBuildings(false)}
-															className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
-																ownershipWizard.state.ownsBuildings === false
-																	? "bg-blue-600 text-white"
-																	: "border border-gray-300 text-gray-700 hover:bg-gray-50"
-															}`}
-														>
-															No
-														</button>
-													</div>
-												</div>
-											</div>
-
-											<div className="flex gap-3 justify-end mt-8">
-												<button
-													onClick={handleOwnershipWizardSkip}
-													className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-												>
-													Skip
-												</button>
-												<button
-													onClick={handleOwnershipQuestionsNext}
-													disabled={ownershipWizard.state.ownsLand === null || ownershipWizard.state.ownsBuildings === null}
-													className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-												>
-													Next
-												</button>
-											</div>
-										</>
-									)}
-
-									{ownershipWizard.state.step === "values" && (
-										<>
-											<h3 className="text-lg font-semibold text-gray-900 mb-6">
-												Enter Asset Values
-											</h3>
-											
-											<div className="space-y-6">
-												{ownershipWizard.state.ownsLand && (
-													<div className="p-4 bg-gray-50 rounded-lg">
-														<h4 className="font-medium text-gray-900 mb-3">Land</h4>
-														<div className="space-y-3">
-															<div>
-																<label className="block text-sm text-gray-700 mb-1">
-																	Value (NZD)
-																</label>
-																<input
-																	type="number"
-																	value={ownershipWizard.state.landValue}
-																	onChange={(e) => ownershipWizard.actions.setLandValue(e.target.value)}
-																	placeholder="0.00"
-																	min="0"
-																	step="0.01"
-																	className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-gray-900"
-																/>
-															</div>
-															<div>
-																<label className="block text-sm text-gray-700 mb-1">
-																	Purchase Date
-																</label>
-																<input
-																	type="date"
-																	value={ownershipWizard.state.landPurchaseDate}
-																	onChange={(e) => ownershipWizard.actions.setLandPurchaseDate(e.target.value)}
-																	className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-gray-900"
-																/>
-															</div>
-														</div>
-													</div>
-												)}
-
-												{ownershipWizard.state.ownsBuildings && (
-													<div className="p-4 bg-gray-50 rounded-lg">
-														<h4 className="font-medium text-gray-900 mb-3">Buildings</h4>
-														<div className="space-y-3">
-															<div>
-																<label className="block text-sm text-gray-700 mb-1">
-																	Value (NZD)
-																</label>
-																<input
-																	type="number"
-																	value={ownershipWizard.state.buildingsValue}
-																	onChange={(e) => ownershipWizard.actions.setBuildingsValue(e.target.value)}
-																	placeholder="0.00"
-																	min="0"
-																	step="0.01"
-																	className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-gray-900"
-																/>
-															</div>
-															<div>
-																<label className="block text-sm text-gray-700 mb-1">
-																	Purchase Date
-																</label>
-																<input
-																	type="date"
-																	value={ownershipWizard.state.buildingsPurchaseDate}
-																	onChange={(e) => ownershipWizard.actions.setBuildingsPurchaseDate(e.target.value)}
-																	className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-gray-900"
-																/>
-															</div>
-														</div>
-													</div>
-												)}
-											</div>
-
-											<div className="flex gap-3 justify-end mt-8">
-												<button
-													onClick={() => ownershipWizard.actions.setStep("questions")}
-													className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-												>
-													Back
-												</button>
-												<button
-													onClick={handleOwnershipValuesSkip}
-													className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-												>
-													Skip
-												</button>
-												<button
-													onClick={handleOwnershipWizardContinue}
-													className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-												>
-													Continue
-												</button>
-											</div>
-										</>
-									)}
-								</div>
-							</div>
+							<OwnershipWizardModal
+								ownershipWizardStep={ownershipWizard.state.step}
+								ownsLand={ownershipWizard.state.ownsLand}
+								setOwnsLand={ownershipWizard.actions.setOwnsLand}
+								ownsBuildings={ownershipWizard.state.ownsBuildings}
+								setOwnsBuildings={ownershipWizard.actions.setOwnsBuildings}
+								landValue={ownershipWizard.state.landValue}
+								setLandValue={ownershipWizard.actions.setLandValue}
+								landPurchaseDate={ownershipWizard.state.landPurchaseDate}
+								setLandPurchaseDate={ownershipWizard.actions.setLandPurchaseDate}
+								buildingsValue={ownershipWizard.state.buildingsValue}
+								setBuildingsValue={ownershipWizard.actions.setBuildingsValue}
+								buildingsPurchaseDate={ownershipWizard.state.buildingsPurchaseDate}
+								setBuildingsPurchaseDate={ownershipWizard.actions.setBuildingsPurchaseDate}
+								onClose={ownershipWizard.actions.closeWizard}
+								onQuestionsNext={handleOwnershipQuestionsNext}
+								onValuesSkip={handleOwnershipValuesSkip}
+								onContinue={handleOwnershipWizardContinue}
+								onBack={() => ownershipWizard.actions.setStep("questions")}
+								onSkip={handleOwnershipWizardSkip}
+								ownsLandDisabled={false}
+								ownsBuildingsDisabled={false}
+							/>
 						)}
 
 						{/* Room naming modal */}
