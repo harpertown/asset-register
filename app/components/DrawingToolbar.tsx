@@ -7,13 +7,13 @@ interface DrawingToolbarProps {
   selectedColor: string;
   setSelectedColor: (color: string) => void;
   colors: string[];
-  onStartAddRoom: () => void;
+  onStartWizard: () => void;
+  onAddRoom: () => void;
   onDoneDrawing: () => void;
   onExportCSV: () => void;
   onImportCSV: () => void;
   onRemoveSitePlan: () => void;
-  showImportInput: boolean;
-  importFileInputRef: React.RefObject<HTMLInputElement>;
+  importFileInputRef: React.RefObject<HTMLInputElement | null>;
   onImportFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   registerCompleted: boolean;
 }
@@ -25,12 +25,12 @@ export default function DrawingToolbar({
   selectedColor,
   setSelectedColor,
   colors,
-  onStartAddRoom,
+  onStartWizard,
+  onAddRoom,
   onDoneDrawing,
   onExportCSV,
   onImportCSV,
   onRemoveSitePlan,
-  showImportInput,
   importFileInputRef,
   onImportFileChange,
   registerCompleted
@@ -40,7 +40,7 @@ export default function DrawingToolbar({
       {!wizardActive && !registerCompleted ? (
         <>
           <button
-            onClick={onStartAddRoom}
+            onClick={onStartWizard}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             Start Asset Register Wizard
@@ -74,7 +74,7 @@ export default function DrawingToolbar({
       ) : !wizardActive ? (
         <>
           <button
-            onClick={onStartAddRoom}
+            onClick={onAddRoom}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             Add Room
