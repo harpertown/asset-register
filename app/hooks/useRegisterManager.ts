@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import type { Register, Room, Asset } from "~/types";
-import { apiService } from "~/services/api";
+import { apiService, ApiError } from "~/services/api";
+import { useToast } from "~/components/ToastProvider";
 
 export interface UseRegisterManagerReturn {
   // State
@@ -34,8 +35,14 @@ export function useRegisterManager(): UseRegisterManagerReturn {
   const [registers, setRegisters] = useState<Register[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const { showError } = useToast();
 
   const currentRegister = editingIndex !== null ? registers[editingIndex] : null;
+
+  const getErrorMessage = (err: unknown, fallback: string): string => {
+    if (err instanceof ApiError) return err.message;
+    return fallback;
+  };
 
   const loadRegisters = useCallback(async () => {
     try {
@@ -44,10 +51,11 @@ export function useRegisterManager(): UseRegisterManagerReturn {
       setRegisters(data);
     } catch (err) {
       console.error("Failed to load registers:", err);
+      showError(getErrorMessage(err, "Failed to load registers"));
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [showError]);
 
   const createRegister = useCallback(async (address: string) => {
     try {
@@ -60,9 +68,10 @@ export function useRegisterManager(): UseRegisterManagerReturn {
       }]);
     } catch (err) {
       console.error("Failed to create register:", err);
+      showError(getErrorMessage(err, "Failed to create register"));
       throw err;
     }
-  }, []);
+  }, [showError]);
 
   const updateRegister = useCallback(async (index: number, updates: Partial<Register>) => {
     const register = registers[index];
@@ -83,9 +92,10 @@ export function useRegisterManager(): UseRegisterManagerReturn {
       });
     } catch (err) {
       console.error("Failed to update register:", err);
+      showError(getErrorMessage(err, "Failed to update register"));
       throw err;
     }
-  }, [registers]);
+  }, [registers, showError]);
 
   const updateSitePlan = useCallback(async (sitePlan: string | null) => {
     if (editingIndex === null) return;
@@ -113,9 +123,10 @@ export function useRegisterManager(): UseRegisterManagerReturn {
         });
       } catch (err) {
         console.error("Failed to update register:", err);
+        showError(getErrorMessage(err, "Failed to remove site plan"));
       }
     }
-  }, [editingIndex, registers]);
+  }, [editingIndex, registers, showError]);
 
   const addRoom = useCallback(async (room: Room) => {
     if (editingIndex === null) return;
@@ -137,9 +148,10 @@ export function useRegisterManager(): UseRegisterManagerReturn {
         });
       } catch (err) {
         console.error("Failed to create asset group:", err);
+        showError(getErrorMessage(err, "Failed to create asset group"));
       }
     }
-  }, [editingIndex, registers]);
+  }, [editingIndex, registers, showError]);
 
   const deleteRoom = useCallback(async (roomId: string) => {
     if (editingIndex === null) return;
@@ -154,8 +166,9 @@ export function useRegisterManager(): UseRegisterManagerReturn {
       await apiService.deleteAssetGroup(roomId);
     } catch (err) {
       console.error("Failed to delete asset group:", err);
+      showError(getErrorMessage(err, "Failed to delete asset group"));
     }
-  }, [editingIndex, registers]);
+  }, [editingIndex, registers, showError]);
 
   const addAsset = useCallback(async (roomId: string, asset: Asset) => {
     if (editingIndex === null) return;
@@ -186,8 +199,9 @@ export function useRegisterManager(): UseRegisterManagerReturn {
       });
     } catch (err) {
       console.error("Failed to create asset:", err);
+      showError(getErrorMessage(err, "Failed to create asset"));
     }
-  }, [editingIndex, registers]);
+  }, [editingIndex, registers, showError]);
 
   const updateAsset = useCallback(async (roomId: string, assetId: string, updates: Partial<Asset>) => {
     if (editingIndex === null) return;
@@ -224,8 +238,9 @@ export function useRegisterManager(): UseRegisterManagerReturn {
       });
     } catch (err) {
       console.error("Failed to update asset:", err);
+      showError(getErrorMessage(err, "Failed to update asset"));
     }
-  }, [editingIndex, registers]);
+  }, [editingIndex, registers, showError]);
 
   const deleteAsset = useCallback(async (roomId: string, assetId: string) => {
     if (editingIndex === null) return;
@@ -243,8 +258,9 @@ export function useRegisterManager(): UseRegisterManagerReturn {
       await apiService.deleteAsset(assetId);
     } catch (err) {
       console.error("Failed to delete asset:", err);
+      showError(getErrorMessage(err, "Failed to delete asset"));
     }
-  }, [editingIndex, registers]);
+  }, [editingIndex, registers, showError]);
 
   return {
     registers,

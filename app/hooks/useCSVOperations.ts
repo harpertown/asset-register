@@ -2,7 +2,8 @@ import { useCallback } from "react";
 import type { Register, Room, Asset } from "~/types";
 import { parseCSVForImport } from "~/utils";
 import type { UseImportWizard } from "./useImportWizard";
-import { apiService } from "~/services/api";
+import { apiService, ApiError } from "~/services/api";
+import { useToast } from "~/components/ToastProvider";
 
 export interface UseCSVOperationsParams {
   registers: Register[];
@@ -17,7 +18,7 @@ export interface UseCSVOperationsReturn {
   createImportGroup: () => Promise<void>;
   handleImportNext: () => Promise<void>;
   handleImportSkip: () => void;
-  handleImportEdit: (editedAsset: any) => void;
+  handleImportEdit: (editedAsset: Partial<Asset>) => void;
   closeImportWizard: () => void;
 }
 
@@ -27,6 +28,7 @@ export function useCSVOperations({
   setRegisters,
   importWizard,
 }: UseCSVOperationsParams): UseCSVOperationsReturn {
+  const { showError, showSuccess } = useToast();
 
   const handleExportCSV = useCallback(() => {
     if (editingIndex === null) return;
@@ -143,10 +145,10 @@ export function useCSVOperations({
           color: "#8b5cf6",
         });
 
-        // Create assets
-        for (const asset of importWizard.state.importedAssets) {
-          const assetId = `asset-${Date.now()}-${Math.random()}`;
-          const newAsset: Asset = {
+        // Prepare all assets for batch creation
+        const assetsToCreate = importWizard.state.importedAssets.map((asset, index) => {
+          const assetId = `asset-${Date.now()}-${index}`;
+          return {
             id: assetId,
             assetId: asset.assetId || undefined,
             itemType: asset.itemType || "",
@@ -159,36 +161,47 @@ export function useCSVOperations({
             depnRateAcc: asset.depnRateAcc || undefined,
             depnMethodTax: asset.depnMethodTax || undefined,
             depnRateTax: asset.depnRateTax || undefined,
-          };
+          } as Asset;
+        });
 
-          updatedRegisters[editingIndex].rooms[updatedRegisters[editingIndex].rooms.length - 1].assets.push(newAsset);
+        // Add all assets to local state first
+        updatedRegisters[editingIndex].rooms[updatedRegisters[editingIndex].rooms.length - 1].assets.push(...assetsToCreate);
+        setRegisters([...updatedRegisters]);
 
-          await apiService.createAsset({
-            assetGroupId: groupId,
-            id: assetId,
-            assetId: newAsset.assetId,
-            itemType: newAsset.itemType,
-            name: newAsset.name,
-            serialNumber: newAsset.serialNumber,
-            purchasePrice: newAsset.purchasePrice,
-            purchaseDate: newAsset.purchaseDate,
-            incomplete: newAsset.incomplete,
-            depnMethodAcc: newAsset.depnMethodAcc,
-            depnRateAcc: newAsset.depnRateAcc,
-            depnMethodTax: newAsset.depnMethodTax,
-            depnRateTax: newAsset.depnRateTax,
-          });
-        }
-
-        setRegisters(updatedRegisters);
+        // Create assets in parallel using Promise.all
+        await Promise.all(
+          assetsToCreate.map((newAsset) =>
+            apiService.createAsset({
+              assetGroupId: groupId,
+              id: newAsset.id,
+              assetId: newAsset.assetId,
+              itemType: newAsset.itemType,
+              name: newAsset.name,
+              serialNumber: newAsset.serialNumber,
+              purchasePrice: newAsset.purchasePrice,
+              purchaseDate: newAsset.purchaseDate,
+              incomplete: newAsset.incomplete,
+              depnMethodAcc: newAsset.depnMethodAcc,
+              depnRateAcc: newAsset.depnRateAcc,
+              depnMethodTax: newAsset.depnMethodTax,
+              depnRateTax: newAsset.depnRateTax,
+            })
+          )
+        );
+        
+        showSuccess(`Successfully imported ${assetsToCreate.length} asset${assetsToCreate.length !== 1 ? 's' : ''}`);
       } catch (err) {
         console.error("Failed to create import group:", err);
+        const message = err instanceof ApiError 
+          ? `Import failed: ${err.message}` 
+          : "Failed to import assets. Please try again.";
+        showError(message);
       }
     }
 
     // Close wizard
     importWizard.actions.closeWizard();
-  }, [registers, editingIndex, setRegisters, importWizard]);
+  }, [registers, editingIndex, setRegisters, importWizard, showError, showSuccess]);
 
   const handleImportNext = useCallback(async () => {
     if (!importWizard.isLastAsset) {
@@ -199,16 +212,16 @@ export function useCSVOperations({
     }
   }, [importWizard, createImportGroup]);
 
-  const handleImportSkip = useCallback(() => {
+  const handleImportSkip = useCallback(async () => {
     if (!importWizard.isLastAsset) {
       importWizard.actions.nextAsset();
     } else {
       // All assets reviewed, create the import group
-      createImportGroup();
+      await createImportGroup();
     }
   }, [importWizard, createImportGroup]);
 
-  const handleImportEdit = useCallback((editedAsset: any) => {
+  const handleImportEdit = useCallback((editedAsset: Partial<Asset>) => {
     importWizard.actions.updateCurrentAsset(editedAsset);
   }, [importWizard.actions]);
 

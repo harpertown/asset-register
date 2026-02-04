@@ -17,6 +17,8 @@ import {
 } from "~/hooks";
 import RegisterEditingView from "~/components/RegisterEditingView";
 import RegisterListView from "~/components/RegisterListView";
+import { useToast } from "~/components/ToastProvider";
+import { ApiError } from "~/services/api";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -27,6 +29,7 @@ export function meta({}: Route.MetaArgs) {
 
 export default function Home() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { showError, showSuccess } = useToast();
   
   // Core register management
   const registerManager = useRegisterManager();
@@ -292,8 +295,14 @@ export default function Home() {
             path,
             isWholeSite: newRoom.isWholeSite,
           });
+          
+          showSuccess(`Asset group "${newRoom.name}" created`);
         } catch (err) {
           console.error("Failed to create asset group:", err);
+          const message = err instanceof ApiError 
+            ? err.message 
+            : "Failed to create asset group. Please try again.";
+          showError(message);
         }
       }
 

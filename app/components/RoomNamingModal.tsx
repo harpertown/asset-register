@@ -1,7 +1,8 @@
 import ModalWrapper from "./ModalWrapper";
+import type { Room } from "~/types";
 
 interface RoomNamingModalProps {
-  namingRoom: any;
+  namingRoom: Room | null;
   roomName: string;
   onRoomNameChange: (value: string) => void;
   onSave: (e: React.FormEvent) => void;

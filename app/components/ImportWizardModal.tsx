@@ -1,16 +1,18 @@
 import ImportAssetForm from "~/components/ImportAssetForm";
 import ModalWrapper from "./ModalWrapper";
+import type { ImportAsset } from "~/hooks/useImportWizard";
+import type { Asset } from "~/types";
 
 interface ImportWizardModalProps {
   showImportWizard: boolean;
-  importedAssets: any[];
+  importedAssets: ImportAsset[];
   currentImportIndex: number;
   onClose: () => void;
-  onSave: (editedAsset: any) => void;
+  onSave: (editedAsset: Partial<Asset>) => void;
   onNext: () => void;
   onSkip: () => void;
   isLast: boolean;
-  onEdit: (editedAsset: any) => void;
+  onEdit: (editedAsset: Partial<Asset>) => void;
 }
 
 export default function ImportWizardModal({

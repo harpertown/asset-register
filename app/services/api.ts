@@ -5,11 +5,46 @@ interface Point {
   y: number;
 }
 
+/**
+ * Custom error class for API errors with response details
+ */
+export class ApiError extends Error {
+  status: number;
+  details?: string;
+
+  constructor(message: string, status: number, details?: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.details = details;
+  }
+}
+
+/**
+ * Helper to handle API response errors with detailed messages
+ */
+async function handleResponse<T>(res: Response, operation: string): Promise<T> {
+  if (!res.ok) {
+    let details: string | undefined;
+    try {
+      const errorBody = await res.json();
+      details = errorBody.error || errorBody.message || JSON.stringify(errorBody);
+    } catch {
+      details = await res.text().catch(() => undefined);
+    }
+    throw new ApiError(
+      `${operation}: ${res.statusText || "Request failed"}`,
+      res.status,
+      details
+    );
+  }
+  return res.json();
+}
+
 export const apiService = {
   async getRegisters(): Promise<Register[]> {
     const res = await fetch("/api/registers");
-    if (!res.ok) throw new Error("Failed to fetch registers");
-    return res.json();
+    return handleResponse<Register[]>(res, "Failed to fetch registers");
   },
 
   async createRegister(data: Partial<Register>): Promise<{ id: string; success: boolean }> {
@@ -18,8 +53,7 @@ export const apiService = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "create_register", ...data }),
     });
-    if (!res.ok) throw new Error("Failed to create register");
-    return res.json();
+    return handleResponse(res, "Failed to create register");
   },
 
   async updateRegister(data: Partial<Register> & { id: string }): Promise<{ success: boolean }> {
@@ -28,8 +62,7 @@ export const apiService = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "update_register", ...data }),
     });
-    if (!res.ok) throw new Error("Failed to update register");
-    return res.json();
+    return handleResponse(res, "Failed to update register");
   },
 
   async deleteRegister(id: string): Promise<{ success: boolean }> {
@@ -38,8 +71,7 @@ export const apiService = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete_register", id }),
     });
-    if (!res.ok) throw new Error("Failed to delete register");
-    return res.json();
+    return handleResponse(res, "Failed to delete register");
   },
 
   async createAssetGroup(data: {
@@ -58,8 +90,7 @@ export const apiService = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "create_asset_group", ...data }),
     });
-    if (!res.ok) throw new Error("Failed to create asset group");
-    return res.json();
+    return handleResponse(res, "Failed to create asset group");
   },
 
   async deleteAssetGroup(id: string): Promise<{ success: boolean }> {
@@ -68,8 +99,7 @@ export const apiService = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete_asset_group", id }),
     });
-    if (!res.ok) throw new Error("Failed to delete asset group");
-    return res.json();
+    return handleResponse(res, "Failed to delete asset group");
   },
 
   async createAsset(data: {
@@ -93,8 +123,7 @@ export const apiService = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "create_asset", ...data }),
     });
-    if (!res.ok) throw new Error("Failed to create asset");
-    return res.json();
+    return handleResponse(res, "Failed to create asset");
   },
 
   async deleteAsset(id: string): Promise<{ success: boolean }> {
@@ -103,8 +132,7 @@ export const apiService = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete_asset", id }),
     });
-    if (!res.ok) throw new Error("Failed to delete asset");
-    return res.json();
+    return handleResponse(res, "Failed to delete asset");
   },
 
   async updateAsset(data: {
@@ -127,7 +155,6 @@ export const apiService = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "update_asset", ...data }),
     });
-    if (!res.ok) throw new Error("Failed to update asset");
-    return res.json();
+    return handleResponse(res, "Failed to update asset");
   },
 };

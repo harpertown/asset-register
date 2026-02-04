@@ -43,17 +43,31 @@ export function parseDate(dateStr: string): string {
 		return dateStr;
 	}
 	
-	// Try DD/MM/YYYY format
-	const dmyMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-	if (dmyMatch) {
-		const [, day, month, year] = dmyMatch;
-		return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-	}
-	
-	// Try MM/DD/YYYY format (US)
-	const mdyMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-	if (mdyMatch) {
-		const [, month, day, year] = mdyMatch;
+	// Try DD/MM/YYYY or MM/DD/YYYY format
+	const slashMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+	if (slashMatch) {
+		const [, first, second, year] = slashMatch;
+		const firstNum = parseInt(first, 10);
+		const secondNum = parseInt(second, 10);
+		
+		// Use heuristics to determine format:
+		// If first number > 12, it must be day (DD/MM/YYYY)
+		// If second number > 12, it must be day (MM/DD/YYYY)
+		// Otherwise, assume DD/MM/YYYY (NZ format)
+		let day: string, month: string;
+		if (firstNum > 12) {
+			// DD/MM/YYYY - first is definitely day
+			day = first;
+			month = second;
+		} else if (secondNum > 12) {
+			// MM/DD/YYYY - second is definitely day
+			month = first;
+			day = second;
+		} else {
+			// Ambiguous - default to DD/MM/YYYY (NZ format)
+			day = first;
+			month = second;
+		}
 		return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
 	}
 	

@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router";
 import React from "react";
 import { apiService } from "~/services/api";
 import { calculateDepreciationSchedule, calculateCategorySummary } from "~/services/depreciationService";
 import type { Register, Transaction } from "~/types";
+import type { DepreciationSchedule, CategorySummary } from "~/services/depreciationService";
 import { formatCurrency, currencyCellStyle, calculateFinancialPeriod, formatDate } from "~/utils";
 
 export function meta() {
@@ -24,10 +25,43 @@ export default function Transactions() {
 
 	// Depreciation calculation state
 	const [showDepreciationModal, setShowDepreciationModal] = useState(false);
-	// Using any[] to allow flexibility for both DepreciationSchedule and CategorySummary types
-	const [depreciationResults, setDepreciationResults] = useState<any[]>([]);
-	const [financialYear, setFinancialYear] = useState("2024");
+	const [depreciationResults, setDepreciationResults] = useState<(DepreciationSchedule | CategorySummary)[]>([]);
+	const [financialYear, setFinancialYear] = useState(() => {
+		// Calculate current financial year dynamically (NZ FY ends March 31)
+		const now = new Date();
+		const currentYear = now.getFullYear();
+		const currentMonth = now.getMonth() + 1; // 1-12
+		return currentMonth >= 4 ? String(currentYear + 1) : String(currentYear);
+	});
 	const [depreciationType, setDepreciationType] = useState<"working" | "register">("working");
+
+	// Pre-filter depreciation results once to avoid repeated filtering in render
+	// For FY Working view (month-by-month schedules)
+	const scheduleAccountingResults = useMemo((): DepreciationSchedule[] => 
+		depreciationType === "working" 
+			? (depreciationResults.filter(r => r.calcType === "accounting") as DepreciationSchedule[])
+			: [],
+		[depreciationResults, depreciationType]
+	);
+	const scheduleTaxResults = useMemo((): DepreciationSchedule[] => 
+		depreciationType === "working"
+			? (depreciationResults.filter(r => r.calcType === "tax") as DepreciationSchedule[])
+			: [],
+		[depreciationResults, depreciationType]
+	);
+	// For FY Register view (category summaries)
+	const summaryAccountingResults = useMemo((): CategorySummary[] => 
+		depreciationType === "register"
+			? (depreciationResults.filter(r => r.calcType === "accounting") as CategorySummary[])
+			: [],
+		[depreciationResults, depreciationType]
+	);
+	const summaryTaxResults = useMemo((): CategorySummary[] => 
+		depreciationType === "register"
+			? (depreciationResults.filter(r => r.calcType === "tax") as CategorySummary[])
+			: [],
+		[depreciationResults, depreciationType]
+	);
 
 	const loadData = useCallback(async () => {
 		try {
@@ -255,10 +289,10 @@ export default function Transactions() {
 													</tr>
 												</thead>
 												<tbody>
-													{depreciationResults.filter(r => r.calcType === "accounting").map((result, index) => (
+													{scheduleAccountingResults.map((result, index) => (
 														<tr key={index} className="border-b hover:bg-gray-50">
 															<td className="px-2 py-1 text-xs text-gray-900 font-medium">{result.assetId || "-"}</td>
-															{result.months.map((month: any, monthIndex: number) => (
+															{result.months.map((month, monthIndex) => (
 																<React.Fragment key={monthIndex}>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.openingValue === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.openingValue) : "-"}</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.revalns === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.revalns) : "-"}</td>
@@ -280,7 +314,7 @@ export default function Transactions() {
 													<tr className="bg-gray-100 font-semibold">
 														<td className="px-2 py-2 text-xs text-gray-900" colSpan={2}>Total</td>
 														{Array(12).fill(0).map((_, i) => {
-															const depnTotal = depreciationResults.filter(r => r.calcType === "accounting").reduce((sum, r) => sum + (r.months[i]?.depn || 0), 0);
+																const depnTotal = scheduleAccountingResults.reduce((sum, r) => sum + (r.months[i]?.depn || 0), 0);
 															return (
 																<React.Fragment key={i}>
 																	<td className="px-1 py-1 text-xs text-gray-900 text-center" style={currencyCellStyle}>-</td>
@@ -294,9 +328,9 @@ export default function Transactions() {
 															);
 														})}
 														{(() => {
-															const openTotal = depreciationResults.filter(r => r.calcType === "accounting").reduce((sum, r) => sum + r.open, 0);
-															const depnTotal = depreciationResults.filter(r => r.calcType === "accounting").reduce((sum, r) => sum + r.totalDepn, 0);
-															const closeTotal = depreciationResults.filter(r => r.calcType === "accounting").reduce((sum, r) => sum + r.close, 0);
+																const openTotal = scheduleAccountingResults.reduce((sum, r) => sum + r.open, 0);
+																const depnTotal = scheduleAccountingResults.reduce((sum, r) => sum + r.totalDepn, 0);
+																const closeTotal = scheduleAccountingResults.reduce((sum, r) => sum + r.close, 0);
 															return (
 																<>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${openTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
@@ -367,10 +401,10 @@ export default function Transactions() {
 													</tr>
 												</thead>
 												<tbody>
-													{depreciationResults.filter(r => r.calcType === "tax").map((result, index) => (
-														<tr key={index} className="border-b hover:bg-gray-50">
-															<td className="px-2 py-1 text-xs text-gray-900 font-medium">{result.assetId || "-"}</td>
-															{result.months.map((month: any, monthIndex: number) => (
+															{scheduleTaxResults.map((result, index) => (
+																<tr key={index} className="border-b hover:bg-gray-50">
+																	<td className="px-2 py-1 text-xs text-gray-900 font-medium">{result.assetId || "-"}</td>
+																	{result.months.map((month, monthIndex) => (
 																<React.Fragment key={monthIndex}>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.openingValue === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.openingValue) : "-"}</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.revalns === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.revalns) : "-"}</td>
@@ -392,7 +426,7 @@ export default function Transactions() {
 													<tr className="bg-gray-100 font-semibold">
 														<td className="px-2 py-2 text-xs text-gray-900" colSpan={2}>Total</td>
 														{Array(12).fill(0).map((_, i) => {
-															const depnTotal = depreciationResults.filter(r => r.calcType === "tax").reduce((sum, r) => sum + (r.months[i]?.depn || 0), 0);
+																		const depnTotal = scheduleTaxResults.reduce((sum, r) => sum + (r.months[i]?.depn || 0), 0);
 															return (
 																<React.Fragment key={i}>
 																	<td className="px-1 py-1 text-xs text-gray-900 text-center" style={currencyCellStyle}>-</td>
@@ -406,9 +440,9 @@ export default function Transactions() {
 															);
 														})}
 														{(() => {
-															const openTotal = depreciationResults.filter(r => r.calcType === "tax").reduce((sum, r) => sum + r.open, 0);
-															const depnTotal = depreciationResults.filter(r => r.calcType === "tax").reduce((sum, r) => sum + r.totalDepn, 0);
-															const closeTotal = depreciationResults.filter(r => r.calcType === "tax").reduce((sum, r) => sum + r.close, 0);
+														const openTotal = scheduleTaxResults.reduce((sum, r) => sum + r.open, 0);
+														const depnTotal = scheduleTaxResults.reduce((sum, r) => sum + r.totalDepn, 0);
+														const closeTotal = scheduleTaxResults.reduce((sum, r) => sum + r.close, 0);
 															return (
 																<>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${openTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
@@ -452,7 +486,7 @@ export default function Transactions() {
 													</tr>
 												</thead>
 												<tbody>
-													{depreciationResults.filter(r => r.calcType === "accounting").map((result, index) => (
+															{summaryAccountingResults.map((result, index) => (
 														<tr key={index} className="border-b hover:bg-gray-50">
 															<td className="px-4 py-2 text-gray-900 font-medium">{result.category}</td>
 															<td className="px-4 py-2 text-gray-900 text-right">{formatCurrency(result.openingBookValue)}</td>
@@ -468,22 +502,22 @@ export default function Transactions() {
 													<tr className="bg-gray-100 font-semibold">
 														<td className="px-4 py-2 text-gray-900">Total</td>
 														<td className="px-4 py-2 text-gray-900 text-right">
-															{formatCurrency(depreciationResults.filter(r => r.calcType === "accounting").reduce((sum, r) => sum + r.openingBookValue, 0))}
+															{formatCurrency(summaryAccountingResults.reduce((sum, r) => sum + r.openingBookValue, 0))}
 														</td>
 														<td className="px-4 py-2 text-gray-900 text-right">
-															{formatCurrency(depreciationResults.filter(r => r.calcType === "accounting").reduce((sum, r) => sum + r.revaluations, 0))}
+															{formatCurrency(summaryAccountingResults.reduce((sum, r) => sum + r.revaluations, 0))}
 														</td>
 														<td className="px-4 py-2 text-gray-900 text-right">
-															{formatCurrency(depreciationResults.filter(r => r.calcType === "accounting").reduce((sum, r) => sum + r.additions, 0))}
+															{formatCurrency(summaryAccountingResults.reduce((sum, r) => sum + r.additions, 0))}
 														</td>
 														<td className="px-4 py-2 text-gray-900 text-right">
-															{formatCurrency(depreciationResults.filter(r => r.calcType === "accounting").reduce((sum, r) => sum + r.disposals, 0))}
+															{formatCurrency(summaryAccountingResults.reduce((sum, r) => sum + r.disposals, 0))}
 														</td>
 														<td className="px-4 py-2 text-gray-900 text-right">
-															{formatCurrency(depreciationResults.filter(r => r.calcType === "accounting").reduce((sum, r) => sum + r.depreciation, 0))}
+															{formatCurrency(summaryAccountingResults.reduce((sum, r) => sum + r.depreciation, 0))}
 														</td>
 														<td className="px-4 py-2 text-gray-900 text-right">
-															{formatCurrency(depreciationResults.filter(r => r.calcType === "accounting").reduce((sum, r) => sum + r.closingBookValue, 0))}
+															{formatCurrency(summaryAccountingResults.reduce((sum, r) => sum + r.closingBookValue, 0))}
 														</td>
 													</tr>
 												</tfoot>
@@ -508,7 +542,7 @@ export default function Transactions() {
 													</tr>
 												</thead>
 												<tbody>
-													{depreciationResults.filter(r => r.calcType === "tax").map((result, index) => (
+															{summaryTaxResults.map((result, index) => (
 														<tr key={index} className="border-b hover:bg-gray-50">
 															<td className="px-4 py-2 text-gray-900 font-medium">{result.category}</td>
 															<td className="px-4 py-2 text-gray-900 text-right">{formatCurrency(result.openingBookValue)}</td>
@@ -524,22 +558,22 @@ export default function Transactions() {
 													<tr className="bg-gray-100 font-semibold">
 														<td className="px-4 py-2 text-gray-900">Total</td>
 														<td className="px-4 py-2 text-gray-900 text-right">
-															{formatCurrency(depreciationResults.filter(r => r.calcType === "tax").reduce((sum, r) => sum + r.openingBookValue, 0))}
+															{formatCurrency(summaryTaxResults.reduce((sum, r) => sum + r.openingBookValue, 0))}
 														</td>
 														<td className="px-4 py-2 text-gray-900 text-right">
-															{formatCurrency(depreciationResults.filter(r => r.calcType === "tax").reduce((sum, r) => sum + r.revaluations, 0))}
+															{formatCurrency(summaryTaxResults.reduce((sum, r) => sum + r.revaluations, 0))}
 														</td>
 														<td className="px-4 py-2 text-gray-900 text-right">
-															{formatCurrency(depreciationResults.filter(r => r.calcType === "tax").reduce((sum, r) => sum + r.additions, 0))}
+															{formatCurrency(summaryTaxResults.reduce((sum, r) => sum + r.additions, 0))}
 														</td>
 														<td className="px-4 py-2 text-gray-900 text-right">
-															{formatCurrency(depreciationResults.filter(r => r.calcType === "tax").reduce((sum, r) => sum + r.disposals, 0))}
+															{formatCurrency(summaryTaxResults.reduce((sum, r) => sum + r.disposals, 0))}
 														</td>
 														<td className="px-4 py-2 text-gray-900 text-right">
-															{formatCurrency(depreciationResults.filter(r => r.calcType === "tax").reduce((sum, r) => sum + r.depreciation, 0))}
+															{formatCurrency(summaryTaxResults.reduce((sum, r) => sum + r.depreciation, 0))}
 														</td>
 														<td className="px-4 py-2 text-gray-900 text-right">
-															{formatCurrency(depreciationResults.filter(r => r.calcType === "tax").reduce((sum, r) => sum + r.closingBookValue, 0))}
+															{formatCurrency(summaryTaxResults.reduce((sum, r) => sum + r.closingBookValue, 0))}
 														</td>
 													</tr>
 												</tfoot>

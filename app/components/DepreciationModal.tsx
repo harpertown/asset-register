@@ -1,8 +1,9 @@
 import ModalWrapper from "./ModalWrapper";
+import type { DepreciationResult } from "~/services/depreciationService";
 
 interface DepreciationModalProps {
   showDepreciationModal: boolean;
-  depreciationResults: any[];
+  depreciationResults: DepreciationResult[];
   financialYear: string;
   onClose: () => void;
   formatCurrency: (value: number) => string;
