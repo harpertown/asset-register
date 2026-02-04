@@ -4,7 +4,7 @@ import type { Route } from "./+types/home";
 import { apiService } from "~/services/api";
 import type { Register, Room, Asset, Point, Tool, WizardStep, OwnershipWizardStep } from "~/types";
 import { IRD_ASSET_TYPES, ASSET_CATEGORIES, MOCK_ADDRESSES, COLORS } from "~/constants";
-import { formatCurrency } from "~/utils";
+import { formatCurrency, parseCSVForImport } from "~/utils";
 import { useAssetWizard, useOwnershipWizard, useImportWizard, useDrawingCanvas } from "~/hooks";
 import AddressInput from "~/components/AddressInput";
 import SitePlanCanvas from "~/components/SitePlanCanvas";
@@ -390,7 +390,7 @@ export default function Home() {
 		const reader = new FileReader();
 		reader.onload = (event) => {
 			const text = event.target?.result as string;
-			const parsedAssets = parseCSV(text);
+			const parsedAssets = parseCSVForImport(text);
 
 			if (parsedAssets.length > 0) {
 				importWizard.actions.openWizard(parsedAssets);
@@ -402,119 +402,6 @@ export default function Home() {
 		if (importFileInputRef.current) {
 			importFileInputRef.current.value = "";
 		}
-	};
-
-	const parseCSV = (csvText: string): any[] => {
-		const lines = csvText.split('\n').filter(line => line.trim());
-		if (lines.length < 2) return [];
-
-		// Parse header
-		const headers = parseCSVLine(lines[0]);
-
-		// Find column indices
-		const assetIdIndex = headers.findIndex(h => h.toLowerCase().includes('asset id'));
-		const categoryIndex = headers.findIndex(h => h.toLowerCase().includes('category'));
-		const descriptionIndex = headers.findIndex(h => h.toLowerCase().includes('description'));
-		const dateIndex = headers.findIndex(h => h.toLowerCase().includes('effective date') || h.toLowerCase().includes('record date'));
-		const amountIndex = headers.findIndex(h => h.toLowerCase().includes('transaction amount'));
-		const depnMethodAccIndex = headers.findIndex(h => h.toLowerCase().includes('depn method (acc)'));
-		const depnRateAccIndex = headers.findIndex(h => h.toLowerCase().includes('depn rate (acc)'));
-		const depnMethodTaxIndex = headers.findIndex(h => h.toLowerCase().includes('depn method (tax)'));
-		const depnRateTaxIndex = headers.findIndex(h => h.toLowerCase().includes('depn rate (tax)'));
-
-		const assets: any[] = [];
-
-		// Parse data rows
-		for (let i = 1; i < lines.length; i++) {
-			const values = parseCSVLine(lines[i]);
-			if (values.length < 2) continue;
-
-			// Extract serial number from description (e.g., "iPhone 14 (serial XYZ123467)")
-			const description = values[descriptionIndex] || values[categoryIndex] || "Unknown Asset";
-			const serialMatch = description.match(/\(serial\s+([^\)]+)\)/i);
-			const serialNumber = serialMatch ? serialMatch[1] : "";
-			const name = description.replace(/\(serial\s+[^\)]+\)/i, "").trim();
-
-			// Parse purchase price (remove commas and currency symbols)
-			const amountStr = values[amountIndex] || "0";
-			const purchasePrice = parseFloat(amountStr.replace(/[,NZD$]/g, '')) || 0;
-
-			// Parse date (format: "1-Apr-2023" or similar)
-			const dateStr = values[dateIndex] || "";
-			const purchaseDate = parseDate(dateStr);
-
-			assets.push({
-				assetId: values[assetIdIndex] || "",
-				itemType: values[categoryIndex] || "",
-				name: name,
-				serialNumber: serialNumber,
-				purchasePrice: purchasePrice,
-				purchaseDate: purchaseDate,
-				depnMethodAcc: values[depnMethodAccIndex] || "",
-				depnRateAcc: values[depnRateAccIndex] || "",
-				depnMethodTax: values[depnMethodTaxIndex] || "",
-				depnRateTax: values[depnRateTaxIndex] || "",
-				incomplete: purchasePrice === 0 || !purchaseDate,
-			});
-		}
-
-		return assets;
-	};
-
-	const parseCSVLine = (line: string): string[] => {
-		const result: string[] = [];
-		let current = '';
-		let inQuotes = false;
-
-		for (let i = 0; i < line.length; i++) {
-			const char = line[i];
-
-			if (char === '"') {
-				if (inQuotes && line[i + 1] === '"') {
-					current += '"';
-					i++;
-				} else {
-					inQuotes = !inQuotes;
-				}
-			} else if (char === ',' && !inQuotes) {
-				result.push(current.trim());
-				current = '';
-			} else {
-				current += char;
-			}
-		}
-		result.push(current.trim());
-
-		return result;
-	};
-
-	const parseDate = (dateStr: string): string => {
-		if (!dateStr) return "";
-
-		// Try to parse various date formats
-		// Format: "1-Apr-2023" or "01-Apr-2023"
-		const months: { [key: string]: string } = {
-			'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
-			'may': '05', 'jun': '06', 'jul': '07', 'aug': '08',
-			'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
-		};
-
-		const parts = dateStr.split('-');
-		if (parts.length === 3) {
-			const day = parts[0].padStart(2, '0');
-			const monthKey = parts[1].toLowerCase().substring(0, 3);
-			const month = months[monthKey] || '01';
-			const year = parts[2];
-			return `${year}-${month}-${day}`;
-		}
-
-		// Try ISO format (YYYY-MM-DD)
-		const isoMatch = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
-		if (isoMatch) {
-			return dateStr;
-		}
-
-		return "";
 	};
 
 	const handleImportNext = async () => {

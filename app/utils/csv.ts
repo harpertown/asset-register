@@ -6,6 +6,24 @@ import { parseDate } from "./dates";
 import type { Asset } from "~/types";
 
 /**
+ * Parsed asset from CSV with additional depreciation fields
+ */
+export interface ParsedCSVAsset {
+	id: string;
+	assetId: string;
+	itemType: string;
+	name: string;
+	serialNumber: string;
+	purchasePrice: number;
+	purchaseDate: string;
+	depnMethodAcc: string;
+	depnRateAcc: string;
+	depnMethodTax: string;
+	depnRateTax: string;
+	incomplete: boolean;
+}
+
+/**
  * Parse a single CSV line, handling quoted fields
  */
 export function parseCSVLine(line: string): string[] {
@@ -38,7 +56,69 @@ export function parseCSVLine(line: string): string[] {
 }
 
 /**
- * Parse CSV text into an array of Asset objects
+ * Parse CSV text into an array of ParsedCSVAsset objects
+ * Handles various column formats including depreciation fields
+ */
+export function parseCSVForImport(csvText: string): ParsedCSVAsset[] {
+	const lines = csvText.split('\n').filter(line => line.trim());
+	if (lines.length < 2) return [];
+
+	// Parse header
+	const headers = parseCSVLine(lines[0]);
+
+	// Find column indices
+	const assetIdIndex = headers.findIndex(h => h.toLowerCase().includes('asset id'));
+	const categoryIndex = headers.findIndex(h => h.toLowerCase().includes('category'));
+	const descriptionIndex = headers.findIndex(h => h.toLowerCase().includes('description'));
+	const dateIndex = headers.findIndex(h => h.toLowerCase().includes('effective date') || h.toLowerCase().includes('record date'));
+	const amountIndex = headers.findIndex(h => h.toLowerCase().includes('transaction amount'));
+	const depnMethodAccIndex = headers.findIndex(h => h.toLowerCase().includes('depn method (acc)'));
+	const depnRateAccIndex = headers.findIndex(h => h.toLowerCase().includes('depn rate (acc)'));
+	const depnMethodTaxIndex = headers.findIndex(h => h.toLowerCase().includes('depn method (tax)'));
+	const depnRateTaxIndex = headers.findIndex(h => h.toLowerCase().includes('depn rate (tax)'));
+
+	const assets: ParsedCSVAsset[] = [];
+
+	// Parse data rows
+	for (let i = 1; i < lines.length; i++) {
+		const values = parseCSVLine(lines[i]);
+		if (values.length < 2) continue;
+
+		// Extract serial number from description (e.g., "iPhone 14 (serial XYZ123467)")
+		const description = values[descriptionIndex] || values[categoryIndex] || "Unknown Asset";
+		const serialMatch = description.match(/\(serial\s+([^\)]+)\)/i);
+		const serialNumber = serialMatch ? serialMatch[1] : "";
+		const name = description.replace(/\(serial\s+[^\)]+\)/i, "").trim();
+
+		// Parse purchase price (remove commas and currency symbols)
+		const amountStr = values[amountIndex] || "0";
+		const purchasePrice = parseFloat(amountStr.replace(/[,NZD$]/g, '')) || 0;
+
+		// Parse date
+		const dateStr = values[dateIndex] || "";
+		const purchaseDate = parseDate(dateStr);
+
+		assets.push({
+			id: `import-${Date.now()}-${i}`,
+			assetId: values[assetIdIndex] || "",
+			itemType: values[categoryIndex] || "",
+			name: name,
+			serialNumber: serialNumber,
+			purchasePrice: purchasePrice,
+			purchaseDate: purchaseDate,
+			depnMethodAcc: values[depnMethodAccIndex] || "",
+			depnRateAcc: values[depnRateAccIndex] || "",
+			depnMethodTax: values[depnMethodTaxIndex] || "",
+			depnRateTax: values[depnRateTaxIndex] || "",
+			incomplete: purchasePrice === 0 || !purchaseDate,
+		});
+	}
+
+	return assets;
+}
+
+/**
+ * Parse CSV text into an array of Asset objects (simpler version)
  */
 export function parseCSV(csvText: string): Partial<Asset>[] {
 	const lines = csvText.split('\n').filter(line => line.trim());

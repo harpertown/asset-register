@@ -2,11 +2,26 @@
  * Custom hook for managing import wizard state
  */
 import { useState, useCallback } from "react";
-import type { Asset } from "~/types";
+
+// Import asset type - flexible to accommodate various CSV formats
+export interface ImportAsset {
+	id: string;
+	name: string;
+	assetId?: string;
+	itemType?: string;
+	serialNumber?: string;
+	purchasePrice?: number;
+	purchaseDate?: string;
+	depnMethodAcc?: string;
+	depnRateAcc?: string;
+	depnMethodTax?: string;
+	depnRateTax?: string;
+	incomplete?: boolean;
+}
 
 export interface ImportWizardState {
 	isOpen: boolean;
-	importedAssets: Asset[];
+	importedAssets: ImportAsset[];
 	currentIndex: number;
 }
 
@@ -19,7 +34,7 @@ const initialState: ImportWizardState = {
 export function useImportWizard() {
 	const [state, setState] = useState<ImportWizardState>(initialState);
 
-	const openWizard = useCallback((assets: Asset[]) => {
+	const openWizard = useCallback((assets: ImportAsset[]) => {
 		setState({
 			isOpen: true,
 			importedAssets: assets,
@@ -45,7 +60,7 @@ export function useImportWizard() {
 		}));
 	}, []);
 
-	const updateCurrentAsset = useCallback((updates: Partial<Asset>) => {
+	const updateCurrentAsset = useCallback((updates: Partial<ImportAsset>) => {
 		setState(prev => ({
 			...prev,
 			importedAssets: prev.importedAssets.map((asset, idx) =>
