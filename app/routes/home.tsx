@@ -1420,6 +1420,9 @@ export default function Home() {
 	};
 
 	const formatCurrency = (value: number) => {
+		if (value === 0) {
+			return "-";
+		}
 		return new Intl.NumberFormat("en-NZ", {
 			style: "currency",
 			currency: "NZD",

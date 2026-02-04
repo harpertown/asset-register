@@ -320,6 +320,9 @@ export default function Transactions() {
 	};
 
 	const formatCurrency = (amount: number) => {
+		if (amount === 0) {
+			return "-";
+		}
 		return new Intl.NumberFormat("en-NZ", {
 			style: "currency",
 			currency: "NZD",
