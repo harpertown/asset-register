@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router";
 import React from "react";
 import { apiService } from "~/services/api";
-import type { Register, Transaction, Asset } from "~/types";
+import { calculateDepreciationSchedule, calculateCategorySummary } from "~/services/depreciationService";
+import type { Register, Transaction } from "~/types";
 import { formatCurrency, currencyCellStyle, calculateFinancialPeriod, formatDate } from "~/utils";
 
 export function meta() {
@@ -23,6 +24,7 @@ export default function Transactions() {
 
 	// Depreciation calculation state
 	const [showDepreciationModal, setShowDepreciationModal] = useState(false);
+	// Using any[] to allow flexibility for both DepreciationSchedule and CategorySummary types
 	const [depreciationResults, setDepreciationResults] = useState<any[]>([]);
 	const [financialYear, setFinancialYear] = useState("2024");
 	const [depreciationType, setDepreciationType] = useState<"working" | "register">("working");
@@ -80,106 +82,15 @@ export default function Transactions() {
 
 	useEffect(() => { loadData(); }, [loadData]);
 
-	// Depreciation calculation functions
-	const calculateDepreciationSchedule = (asset: Asset, type: "working" | "register") => {
-		const purchasePrice = asset.purchasePrice || 0;
-		const purchaseDate = new Date(asset.purchaseDate);
-		const currentDate = new Date();
-
-		// Get depreciation rate and method based on type
-		const depnRate = type === "working" ? asset.depnRateAcc : asset.depnRateTax;
-		const depnMethod = type === "working" ? asset.depnMethodAcc : asset.depnMethodTax;
-
-		// Parse depreciation rate (e.g., "2%" -> 0.02)
-		const parseRate = (rate: string) => {
-			const match = rate.match(/(\d+(\.\d+)?)/);
-			return match ? parseFloat(match[1]) / 100 : 0;
-		};
-
-		// Use 0% rate if no rate specified
-		const rate = depnRate ? parseRate(depnRate) : 0;
-		const method = depnMethod ? depnMethod.toLowerCase() : "straight-line";
-
-		// Calculate the financial month when the asset was acquired
-		const acquisitionFinancialPeriod = calculateFinancialPeriod(asset.purchaseDate);
-		const acquisitionMonth = acquisitionFinancialPeriod.month;
-
-		// Calculate month-by-month depreciation for the financial year
-		const months: any[] = [];
-		let openingValue = 0;
-		let totalDepn = 0;
-		let totalAdditions = 0;
-
-		for (let month = 1; month <= 12; month++) {
-			let acquisitions = 0;
-
-			// For the acquisition month, opening value is $0 and acquisitions is the purchase price
-			if (month === acquisitionMonth) {
-				openingValue = 0;
-				acquisitions = purchasePrice;
-				totalAdditions += acquisitions;
-			}
-
-			// Calculate depreciation on the book value (opening + acquisitions)
-			const bookValue = openingValue + acquisitions;
-			const monthDepn = calculateMonthlyDepreciation(bookValue, rate, method);
-			const closingValue = Math.max(0, bookValue - monthDepn);
-
-			months.push({
-				month,
-				openingValue,
-				revalns: 0,
-				acquisitions,
-				disposals: 0,
-				depn: monthDepn,
-				closingValue,
-			});
-
-			totalDepn += monthDepn;
-			openingValue = closingValue;
-		}
-
-		return {
-			assetId: asset.assetId || "",
-			name: asset.name,
-			purchasePrice,
-			months,
-			open: 0, // Opening value for the year is 0 for newly acquired assets
-			totalRevals: 0,
-			totalAdditions,
-			totalDisposals: 0,
-			totalDepn,
-			close: openingValue,
-		};
-	};
-
-	const calculateMonthlyDepreciation = (bookValue: number, rate: number, method: string) => {
-		if (method.includes("straight") || method.includes("sl")) {
-			// Straight-line depreciation: same amount each month
-			return bookValue * rate / 12;
-		} else if (method.includes("diminishing") || method.includes("dv") || method.includes("declining")) {
-			// Diminishing value depreciation: percentage of current book value
-			return bookValue * rate / 12;
-		}
-		return 0;
-	};
-
 	const handleFYWorking = () => {
 		if (!register) return;
 		setDepreciationType("working");
 		// Calculate both accounting and tax depreciation for FY Working
-		const accResults = register.rooms.flatMap((room) =>
-			room.assets.map((asset) => calculateDepreciationSchedule(asset, "working"))
-		);
-		const taxResults = register.rooms.flatMap((room) =>
-			room.assets.map((asset) => calculateDepreciationSchedule(asset, "register"))
-		);
-		// Combine both results with a type indicator
-		const combinedResults = [
-			...accResults.map(r => ({ ...r, calcType: "accounting" })),
-			...taxResults.map(r => ({ ...r, calcType: "tax" })),
-		];
-		setDepreciationResults(combinedResults);
+		const allAssets = register.rooms.flatMap((room) => room.assets);
+		const accResults = allAssets.map((asset) => calculateDepreciationSchedule(asset, "working"));
+		const taxResults = allAssets.map((asset) => calculateDepreciationSchedule(asset, "register"));
+		// Combine both results
+		setDepreciationResults([...accResults, ...taxResults]);
 		setShowDepreciationModal(true);
 	};
 
@@ -188,54 +99,13 @@ export default function Transactions() {
 		setDepreciationType("register");
 		// Calculate summary by asset category for FY Register
 		const categories = ["Land", "Buildings", "Plant and equipment", "Vehicles", "Computer software"];
+		const allAssets = register.rooms.flatMap((room) => room.assets);
 		
-		const calculateCategorySummary = (type: "working" | "register") => {
-			const results: any[] = [];
-			
-			for (const category of categories) {
-				const categoryAssets = register.rooms.flatMap((room) =>
-					room.assets.filter((asset) => asset.itemType.toLowerCase() === category.toLowerCase())
-				);
-				
-				let openingBookValue = 0;
-				let revaluations = 0;
-				let additions = 0;
-				let disposals = 0;
-				let depreciation = 0;
-				let closingBookValue = 0;
-				
-				if (categoryAssets.length > 0) {
-					const schedules = categoryAssets.map((asset) => calculateDepreciationSchedule(asset, type));
-					
-					openingBookValue = schedules.reduce((sum, s) => sum + s.open, 0);
-					revaluations = schedules.reduce((sum, s) => sum + s.totalRevals, 0);
-					additions = schedules.reduce((sum, s) => sum + s.totalAdditions, 0);
-					disposals = schedules.reduce((sum, s) => sum + s.totalDisposals, 0);
-					depreciation = schedules.reduce((sum, s) => sum + s.totalDepn, 0);
-					closingBookValue = schedules.reduce((sum, s) => sum + s.close, 0);
-				}
-				
-				results.push({
-					category,
-					openingBookValue,
-					revaluations,
-					additions,
-					disposals,
-					depreciation,
-					closingBookValue,
-					calcType: type === "working" ? "accounting" : "tax",
-				});
-			}
-			
-			return results;
-		};
-		
-		const accResults = calculateCategorySummary("working");
-		const taxResults = calculateCategorySummary("register");
+		const accResults = calculateCategorySummary(allAssets, categories, "working");
+		const taxResults = calculateCategorySummary(allAssets, categories, "register");
 		
 		// Combine both results
-		const combinedResults = [...accResults, ...taxResults];
-		setDepreciationResults(combinedResults);
+		setDepreciationResults([...accResults, ...taxResults]);
 		setShowDepreciationModal(true);
 	};
 

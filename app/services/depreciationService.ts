@@ -4,6 +4,7 @@
 
 export interface DepreciableAsset {
 	assetId?: string;
+	itemType?: string;
 	name: string;
 	purchasePrice: number;
 	purchaseDate?: string;
@@ -22,6 +23,41 @@ export interface DepreciationResult {
 	bookValueAcc: number;
 	bookValueTax: number;
 	monthsHeld: number;
+}
+
+export interface MonthlyDepreciation {
+	month: number;
+	openingValue: number;
+	revalns: number;
+	acquisitions: number;
+	disposals: number;
+	depn: number;
+	closingValue: number;
+}
+
+export interface DepreciationSchedule {
+	assetId: string;
+	name: string;
+	purchasePrice: number;
+	months: MonthlyDepreciation[];
+	open: number;
+	totalRevals: number;
+	totalAdditions: number;
+	totalDisposals: number;
+	totalDepn: number;
+	close: number;
+	calcType?: "accounting" | "tax";
+}
+
+export interface CategorySummary {
+	category: string;
+	openingBookValue: number;
+	revaluations: number;
+	additions: number;
+	disposals: number;
+	depreciation: number;
+	closingBookValue: number;
+	calcType: "accounting" | "tax";
 }
 
 /**
@@ -162,4 +198,150 @@ export function sumDepreciationResults(results: DepreciationResult[]): {
 			totalBookValueTax: 0,
 		}
 	);
+}
+
+/**
+ * Calculate financial period from a date
+ */
+function calculateFinancialPeriod(dateString?: string): { month: number; year: string } {
+	if (!dateString) return { month: 1, year: "" };
+	const date = new Date(dateString);
+	const month = date.getMonth() + 1;
+	const year = date.getFullYear();
+	// NZ financial year: April to March
+	if (month >= 4) {
+		return { month: month - 3, year: `${year}/${year + 1}` };
+	}
+	return { month: month + 9, year: `${year - 1}/${year}` };
+}
+
+/**
+ * Calculate monthly depreciation
+ */
+function calculateMonthlyDepreciation(bookValue: number, rate: number, method: string): number {
+	if (method.includes("straight") || method.includes("sl")) {
+		return bookValue * rate / 12;
+	} else if (method.includes("diminishing") || method.includes("dv") || method.includes("declining")) {
+		return bookValue * rate / 12;
+	}
+	return 0;
+}
+
+/**
+ * Calculate month-by-month depreciation schedule for an asset
+ */
+export function calculateDepreciationSchedule(
+	asset: DepreciableAsset,
+	type: "working" | "register"
+): DepreciationSchedule {
+	const purchasePrice = asset.purchasePrice || 0;
+
+	// Get depreciation rate and method based on type
+	const depnRate = type === "working" ? asset.depnRateAcc : asset.depnRateTax;
+	const depnMethod = type === "working" ? asset.depnMethodAcc : asset.depnMethodTax;
+
+	// Use 0% rate if no rate specified
+	const rate = depnRate ? parseRate(depnRate) : 0;
+	const method = depnMethod ? depnMethod.toLowerCase() : "straight-line";
+
+	// Calculate the financial month when the asset was acquired
+	const acquisitionFinancialPeriod = calculateFinancialPeriod(asset.purchaseDate);
+	const acquisitionMonth = acquisitionFinancialPeriod.month;
+
+	// Calculate month-by-month depreciation for the financial year
+	const months: MonthlyDepreciation[] = [];
+	let openingValue = 0;
+	let totalDepn = 0;
+	let totalAdditions = 0;
+
+	for (let month = 1; month <= 12; month++) {
+		let acquisitions = 0;
+
+		// For the acquisition month, opening value is $0 and acquisitions is the purchase price
+		if (month === acquisitionMonth) {
+			openingValue = 0;
+			acquisitions = purchasePrice;
+			totalAdditions += acquisitions;
+		}
+
+		// Calculate depreciation on the book value (opening + acquisitions)
+		const bookValue = openingValue + acquisitions;
+		const monthDepn = calculateMonthlyDepreciation(bookValue, rate, method);
+		const closingValue = Math.max(0, bookValue - monthDepn);
+
+		months.push({
+			month,
+			openingValue,
+			revalns: 0,
+			acquisitions,
+			disposals: 0,
+			depn: monthDepn,
+			closingValue,
+		});
+
+		totalDepn += monthDepn;
+		openingValue = closingValue;
+	}
+
+	return {
+		assetId: asset.assetId || "",
+		name: asset.name,
+		purchasePrice,
+		months,
+		open: 0,
+		totalRevals: 0,
+		totalAdditions,
+		totalDisposals: 0,
+		totalDepn,
+		close: openingValue,
+		calcType: type === "working" ? "accounting" : "tax",
+	};
+}
+
+/**
+ * Calculate category summary for FY Register view
+ */
+export function calculateCategorySummary(
+	assets: DepreciableAsset[],
+	categories: string[],
+	type: "working" | "register"
+): CategorySummary[] {
+	const results: CategorySummary[] = [];
+
+	for (const category of categories) {
+		const categoryAssets = assets.filter(
+			(asset) => (asset.itemType || "").toLowerCase() === category.toLowerCase()
+		);
+
+		let openingBookValue = 0;
+		let revaluations = 0;
+		let additions = 0;
+		let disposals = 0;
+		let depreciation = 0;
+		let closingBookValue = 0;
+
+		if (categoryAssets.length > 0) {
+			const schedules = categoryAssets.map((asset) => calculateDepreciationSchedule(asset, type));
+
+			openingBookValue = schedules.reduce((sum, s) => sum + s.open, 0);
+			revaluations = schedules.reduce((sum, s) => sum + s.totalRevals, 0);
+			additions = schedules.reduce((sum, s) => sum + s.totalAdditions, 0);
+			disposals = schedules.reduce((sum, s) => sum + s.totalDisposals, 0);
+			depreciation = schedules.reduce((sum, s) => sum + s.totalDepn, 0);
+			closingBookValue = schedules.reduce((sum, s) => sum + s.close, 0);
+		}
+
+		results.push({
+			category,
+			openingBookValue,
+			revaluations,
+			additions,
+			disposals,
+			depreciation,
+			closingBookValue,
+			calcType: type === "working" ? "accounting" : "tax",
+		});
+	}
+
+	return results;
 }
