@@ -76,6 +76,14 @@ export default function AssetWizardModal({
 
   if (!wizardRoom) return null;
 
+  // Determine if asset will be marked incomplete
+  const price = parseFloat(state.purchasePrice) || 0;
+  const willBeIncomplete = !state.purchasePrice || price === 0 || !state.purchaseDate;
+  const missingFields: string[] = [];
+  if (!state.purchasePrice || price === 0) missingFields.push("purchase price");
+  if (!state.purchaseDate) missingFields.push("purchase date");
+  // Note: Depreciation settings will need to be set separately in View All Assets
+
   return (
     <ModalWrapper isOpen={isOpen} onClose={onClose} maxWidth="max-w-lg">
         {step === "question" && (
@@ -111,8 +119,26 @@ export default function AssetWizardModal({
         {step === "addItem" && (
           <>
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Add Assets to {wizardRoom.name}
+              {isEditing ? "Edit Asset" : "Add Assets"} {wizardRoom.name !== "Uncategorized" && `to ${wizardRoom.name}`}
             </h3>
+            
+            {/* Banner for editing incomplete asset */}
+            {isEditing && willBeIncomplete && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 flex items-start gap-2">
+                <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div>
+                  <p className="text-sm font-medium text-amber-800">
+                    This asset is incomplete
+                  </p>
+                  <p className="text-xs text-amber-700 mt-0.5">
+                    Missing: {missingFields.join(", ")}
+                  </p>
+                </div>
+              </div>
+            )}
+            
             <form onSubmit={onAddAsset} className="flex flex-col gap-4">
               <div className="relative">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -182,8 +208,14 @@ export default function AssetWizardModal({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Purchase Price (NZD)
+                <label className={`block text-sm font-medium mb-1 ${
+                  (!state.purchasePrice || parseFloat(state.purchasePrice) === 0) 
+                    ? "text-amber-700" 
+                    : "text-gray-700"
+                }`}>
+                  Purchase Price (NZD) {(!state.purchasePrice || parseFloat(state.purchasePrice) === 0) && (
+                    <span className="text-amber-600 text-xs ml-1">• Required for complete record</span>
+                  )}
                 </label>
                 <input
                   type="number"
@@ -192,18 +224,30 @@ export default function AssetWizardModal({
                   placeholder="0.00"
                   min="0"
                   step="0.01"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-gray-900"
+                  className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-gray-900 ${
+                    (!state.purchasePrice || parseFloat(state.purchasePrice) === 0)
+                      ? "border-amber-300 focus:ring-amber-400 bg-amber-50"
+                      : "border-gray-300 focus:ring-gray-400"
+                  }`}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Purchase Date
+                <label className={`block text-sm font-medium mb-1 ${
+                  !state.purchaseDate ? "text-amber-700" : "text-gray-700"
+                }`}>
+                  Purchase Date {!state.purchaseDate && (
+                    <span className="text-amber-600 text-xs ml-1">• Required for complete record</span>
+                  )}
                 </label>
                 <input
                   type="date"
                   value={state.purchaseDate}
                   onChange={(e) => onFieldChange("purchaseDate", e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-gray-900"
+                  className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-gray-900 ${
+                    !state.purchaseDate
+                      ? "border-amber-300 focus:ring-amber-400 bg-amber-50"
+                      : "border-gray-300 focus:ring-gray-400"
+                  }`}
                 />
               </div>
               <div>
@@ -272,6 +316,23 @@ export default function AssetWizardModal({
                       </li>
                     ))}
                   </ul>
+                </div>
+              )}
+
+              {/* Incomplete asset warning */}
+              {willBeIncomplete && state.name.trim() && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+                  <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-medium text-amber-800">
+                      This asset will be marked as incomplete
+                    </p>
+                    <p className="text-xs text-amber-700 mt-0.5">
+                      Missing: {missingFields.join(", ")}
+                    </p>
+                  </div>
                 </div>
               )}
 

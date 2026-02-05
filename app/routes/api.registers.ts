@@ -249,39 +249,33 @@ export async function action({ request, context }: Route.ActionArgs) {
 		}
 
 		if (actionType === "update_asset") {
+			// Build dynamic update query for partial updates
+			const updates: string[] = [];
+			const values: any[] = [];
+
+			if (payload.assetId !== undefined) { updates.push("asset_id = ?"); values.push(payload.assetId || null); }
+			if (payload.itemType !== undefined) { updates.push("item_type = ?"); values.push(payload.itemType || null); }
+			if (payload.name !== undefined) { updates.push("name = ?"); values.push(payload.name); }
+			if (payload.serialNumber !== undefined) { updates.push("serial_number = ?"); values.push(payload.serialNumber || null); }
+			if (payload.purchasePrice !== undefined) { updates.push("purchase_price = ?"); values.push(payload.purchasePrice || 0); }
+			if (payload.purchaseDate !== undefined) { updates.push("purchase_date = ?"); values.push(payload.purchaseDate || null); }
+			if (payload.photo !== undefined) { updates.push("photo = ?"); values.push(payload.photo || null); }
+			if (payload.incomplete !== undefined) { updates.push("incomplete = ?"); values.push(payload.incomplete ? 1 : 0); }
+			if (payload.depnMethodAcc !== undefined) { updates.push("depn_method_acc = ?"); values.push(payload.depnMethodAcc || null); }
+			if (payload.depnRateAcc !== undefined) { updates.push("depn_rate_acc = ?"); values.push(payload.depnRateAcc || null); }
+			if (payload.depnMethodTax !== undefined) { updates.push("depn_method_tax = ?"); values.push(payload.depnMethodTax || null); }
+			if (payload.depnRateTax !== undefined) { updates.push("depn_rate_tax = ?"); values.push(payload.depnRateTax || null); }
+
+			if (updates.length === 0) {
+				return Response.json({ success: true }); // Nothing to update
+			}
+
+			updates.push("updated_at = datetime('now')");
+			values.push(payload.id);
+
 			await db
-				.prepare(
-					`UPDATE assets SET 
-						asset_id = ?,
-						item_type = ?, 
-						name = ?, 
-						serial_number = ?, 
-						purchase_price = ?, 
-						purchase_date = ?, 
-						photo = ?, 
-						incomplete = ?,
-						depn_method_acc = ?,
-						depn_rate_acc = ?,
-						depn_method_tax = ?,
-						depn_rate_tax = ?,
-						updated_at = datetime('now')
-					WHERE id = ?`
-				)
-				.bind(
-					payload.assetId || null,
-					payload.itemType || null,
-					payload.name,
-					payload.serialNumber || null,
-					payload.purchasePrice || 0,
-					payload.purchaseDate || null,
-					payload.photo || null,
-					payload.incomplete ? 1 : 0,
-					payload.depnMethodAcc || null,
-					payload.depnRateAcc || null,
-					payload.depnMethodTax || null,
-					payload.depnRateTax || null,
-					payload.id
-				)
+				.prepare(`UPDATE assets SET ${updates.join(", ")} WHERE id = ?`)
+				.bind(...values)
 				.run();
 
 			return Response.json({ success: true });

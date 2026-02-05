@@ -13,12 +13,15 @@ export interface UseRegisterManagerReturn {
   loadRegisters: () => Promise<void>;
   setEditingIndex: (index: number | null) => void;
   createRegister: (address: string) => Promise<void>;
+  deleteRegister: (index: number) => Promise<void>;
   updateRegister: (index: number, updates: Partial<Register>) => Promise<void>;
   updateSitePlan: (sitePlan: string | null) => Promise<void>;
   removeSitePlan: () => Promise<void>;
   
   // Room/Asset Group actions
   addRoom: (room: Room) => Promise<void>;
+  addAssetGroup: (name: string, color: string) => Promise<Room>;
+  getOrCreateUncategorizedGroup: () => Promise<Room>;
   deleteRoom: (roomId: string) => Promise<void>;
   
   // Asset actions
@@ -72,6 +75,32 @@ export function useRegisterManager(): UseRegisterManagerReturn {
       throw err;
     }
   }, [showError]);
+
+  const deleteRegister = useCallback(async (index: number) => {
+    const register = registers[index];
+    if (!register?.id) return;
+
+    // Optimistically remove from state
+    setRegisters(prev => prev.filter((_, i) => i !== index));
+    
+    // Clear editing index if we're deleting the currently edited register
+    if (editingIndex === index) {
+      setEditingIndex(null);
+    } else if (editingIndex !== null && editingIndex > index) {
+      // Adjust editing index if we deleted a register before it
+      setEditingIndex(editingIndex - 1);
+    }
+
+    try {
+      await apiService.deleteRegister(register.id);
+    } catch (err) {
+      console.error("Failed to delete register:", err);
+      showError(getErrorMessage(err, "Failed to delete register"));
+      // Reload registers to restore state on error
+      await loadRegisters();
+      throw err;
+    }
+  }, [registers, editingIndex, showError, loadRegisters]);
 
   const updateRegister = useCallback(async (index: number, updates: Partial<Register>) => {
     const register = registers[index];
@@ -151,6 +180,87 @@ export function useRegisterManager(): UseRegisterManagerReturn {
         showError(getErrorMessage(err, "Failed to create asset group"));
       }
     }
+  }, [editingIndex, registers, showError]);
+
+  const addAssetGroup = useCallback(async (name: string, color: string): Promise<Room> => {
+    if (editingIndex === null) throw new Error("No register selected");
+
+    const newRoom: Room = {
+      id: `group-${Date.now()}`,
+      name,
+      tool: "rectangle",
+      color,
+      assets: [],
+      isWholeSite: false,
+    };
+
+    const updatedRegisters = [...registers];
+    updatedRegisters[editingIndex].rooms.push(newRoom);
+    setRegisters(updatedRegisters);
+
+    const register = updatedRegisters[editingIndex];
+    if (register.id) {
+      try {
+        await apiService.createAssetGroup({
+          registerId: register.id,
+          id: newRoom.id,
+          name: newRoom.name,
+          tool: newRoom.tool,
+          color: newRoom.color,
+          isWholeSite: false,
+        });
+      } catch (err) {
+        console.error("Failed to create asset group:", err);
+        showError(getErrorMessage(err, "Failed to create asset group"));
+        throw err;
+      }
+    }
+
+    return newRoom;
+  }, [editingIndex, registers, showError]);
+
+  const getOrCreateUncategorizedGroup = useCallback(async (): Promise<Room> => {
+    if (editingIndex === null) throw new Error("No register selected");
+
+    const register = registers[editingIndex];
+    const existingUncategorized = register.rooms.find(r => r.name === "Uncategorized");
+    
+    if (existingUncategorized) {
+      return existingUncategorized;
+    }
+
+    // Create the Uncategorized group
+    const newRoom: Room = {
+      id: `uncategorized-${Date.now()}`,
+      name: "Uncategorized",
+      tool: "rectangle",
+      color: "#6b7280", // gray-500
+      assets: [],
+      isWholeSite: false,
+    };
+
+    const updatedRegisters = [...registers];
+    updatedRegisters[editingIndex].rooms.push(newRoom);
+    setRegisters(updatedRegisters);
+
+    if (register.id) {
+      try {
+        await apiService.createAssetGroup({
+          registerId: register.id,
+          id: newRoom.id,
+          name: newRoom.name,
+          tool: newRoom.tool,
+          color: newRoom.color,
+          isWholeSite: false,
+        });
+      } catch (err) {
+        console.error("Failed to create uncategorized group:", err);
+        showError(getErrorMessage(err, "Failed to create asset group"));
+        throw err;
+      }
+    }
+
+    return newRoom;
   }, [editingIndex, registers, showError]);
 
   const deleteRoom = useCallback(async (roomId: string) => {
@@ -269,10 +379,13 @@ export function useRegisterManager(): UseRegisterManagerReturn {
     loadRegisters,
     setEditingIndex,
     createRegister,
+    deleteRegister,
     updateRegister,
     updateSitePlan,
     removeSitePlan,
     addRoom,
+    addAssetGroup,
+    getOrCreateUncategorizedGroup,
     deleteRoom,
     addAsset,
     updateAsset,

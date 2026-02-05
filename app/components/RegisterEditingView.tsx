@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import type { Register, Room, Asset, Tool, Point } from "~/types";
 import type { UseAssetWizard } from "~/hooks/useAssetWizard";
@@ -11,6 +11,7 @@ import RoomNamingModal from "./RoomNamingModal";
 import ImportWizardModal from "./ImportWizardModal";
 import ConfirmDeleteModal from "./ConfirmDeleteModal";
 import AssetWizardModal from "./AssetWizardModal";
+import AssetGroupModal from "./AssetGroupModal";
 import RoomListSection from "./RoomListSection";
 import IncompleteItemsSection from "./IncompleteItemsSection";
 
@@ -59,6 +60,9 @@ interface RegisterEditingViewProps {
   onOwnershipValuesSkip: () => void;
   startAssetRegisterWizard: () => void;
   startAddRoom: () => void;
+  // Asset group handlers
+  onAddAssetGroup: (name: string, color: string) => Promise<Room>;
+  onAddSingleAsset: () => Promise<void>;
   // Import handlers
   onImportNext: () => void;
   onImportSkip: () => void;
@@ -124,6 +128,8 @@ export default function RegisterEditingView({
   onOwnershipValuesSkip,
   startAssetRegisterWizard,
   startAddRoom,
+  onAddAssetGroup,
+  onAddSingleAsset,
   onImportNext,
   onImportSkip,
   onImportEdit,
@@ -143,9 +149,16 @@ export default function RegisterEditingView({
   onBack,
 }: RegisterEditingViewProps) {
   const navigate = useNavigate();
+  const [showAssetGroupModal, setShowAssetGroupModal] = useState(false);
+  
   const wizardRoom = assetWizard.state.roomId
     ? register.rooms.find((r) => r.id === assetWizard.state.roomId)
     : null;
+
+  const handleCreateAssetGroup = async (name: string, color: string) => {
+    await onAddAssetGroup(name, color);
+    setShowAssetGroupModal(false);
+  };
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center py-8 px-4">
@@ -175,6 +188,7 @@ export default function RegisterEditingView({
               colors={colors}
               onStartWizard={startAssetRegisterWizard}
               onAddRoom={startAddRoom}
+              onAddSingleAsset={onAddSingleAsset}
               onDoneDrawing={() => {
                 setWizardActive(false);
                 setSelectedRoomId(null);
@@ -187,7 +201,20 @@ export default function RegisterEditingView({
               registerCompleted={register.wizardCompleted ?? false}
             />
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setShowAssetGroupModal(true)}
+                className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm"
+              >
+                Add Asset Group
+              </button>
+              <button
+                onClick={onAddSingleAsset}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+              >
+                Add Single Asset
+              </button>
+              <div className="w-px h-6 bg-gray-300 mx-1" />
               <button
                 onClick={() => fileInputRef.current?.click()}
                 className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
@@ -381,7 +408,19 @@ export default function RegisterEditingView({
             register={register}
             incompleteSectionExpanded={incompleteSectionExpanded}
             setIncompleteSectionExpanded={setIncompleteSectionExpanded}
-            openAssetWizard={openAssetWizard}
+            onEditAsset={(roomId, asset) => {
+              assetWizard.actions.openWizard(roomId);
+              assetWizard.actions.populateForEdit({
+                id: asset.id,
+                itemType: asset.itemType || "",
+                name: asset.name,
+                assetId: asset.assetId,
+                serialNumber: asset.serialNumber || "",
+                purchasePrice: asset.purchasePrice,
+                purchaseDate: asset.purchaseDate || "",
+                photo: asset.photo,
+              });
+            }}
           />
         </div>
       ) : (
@@ -449,6 +488,14 @@ export default function RegisterEditingView({
           ownsBuildingsDisabled={false}
         />
       )}
+
+      {/* Asset Group Modal */}
+      <AssetGroupModal
+        isOpen={showAssetGroupModal}
+        onClose={() => setShowAssetGroupModal(false)}
+        onSave={handleCreateAssetGroup}
+        existingNames={register.rooms.map(r => r.name)}
+      />
 
       <button
         onClick={onBack}

@@ -331,6 +331,7 @@ export default function Home() {
     const { roomId, name, assetId: formAssetId, itemType, serialNumber, purchasePrice, purchaseDate, photo, editingAssetId } = assetWizard.state;
     if (roomId && name.trim() && editingIndex !== null) {
       const price = parseFloat(purchasePrice) || 0;
+      // Asset is incomplete if missing price, date, OR depreciation settings
       const isIncomplete = !purchasePrice || price === 0 || !purchaseDate;
 
       if (editingAssetId) {
@@ -397,29 +398,33 @@ export default function Home() {
     const strokeWidth = isSelected ? 3 : 2;
 
     if (room.tool === "rectangle" && room.rect) {
+      // Convert hex color to rgba for transparency without affecting children
+      const hexToRgba = (hex: string, alpha: number) => {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      };
+      const bgOpacity = isPreview ? 0.3 : 0.4;
+      
       return (
-        <div
-          key={room.id}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (!wizardActive) setSelectedRoomId(room.id);
-          }}
-          className={`absolute border-2 ${!isPreview && !wizardActive ? "cursor-pointer" : ""}`}
-          style={{
-            left: `${room.rect.x}%`,
-            top: `${room.rect.y}%`,
-            width: `${room.rect.width}%`,
-            height: `${room.rect.height}%`,
-            backgroundColor: room.color,
-            opacity,
-            borderColor: room.color,
-            borderWidth: strokeWidth,
-          }}
-        >
+        <div key={room.id} className="absolute" style={{ left: `${room.rect.x}%`, top: `${room.rect.y}%`, width: `${room.rect.width}%`, height: `${room.rect.height}%` }}>
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!wizardActive) setSelectedRoomId(room.id);
+            }}
+            className={`absolute inset-0 border-2 ${!isPreview && !wizardActive ? "cursor-pointer" : ""}`}
+            style={{
+              backgroundColor: hexToRgba(room.color, bgOpacity),
+              borderColor: room.color,
+              borderWidth: strokeWidth,
+            }}
+          />
           {!isPreview && room.name && (
             <span
-              className="absolute top-1 left-1 text-xs font-semibold px-1 rounded"
-              style={{ backgroundColor: room.color, color: "white" }}
+              className="absolute top-1 left-1 text-xs font-semibold px-1.5 py-0.5 rounded shadow-sm z-10"
+              style={{ backgroundColor: "white", color: "#111827", border: `2px solid ${room.color}` }}
             >
               {room.name}
             </span>
@@ -429,29 +434,41 @@ export default function Home() {
     }
 
     if (room.tool === "circle" && room.circle) {
+      const hexToRgba = (hex: string, alpha: number) => {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      };
+      const bgOpacity = isPreview ? 0.3 : 0.4;
+      
       return (
         <div
           key={room.id}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (!wizardActive) setSelectedRoomId(room.id);
-          }}
-          className={`absolute rounded-full border-2 ${!isPreview && !wizardActive ? "cursor-pointer" : ""}`}
+          className="absolute"
           style={{
             left: `${room.circle.cx - room.circle.radius}%`,
             top: `${room.circle.cy - room.circle.radius}%`,
             width: `${room.circle.radius * 2}%`,
             height: `${room.circle.radius * 2}%`,
-            backgroundColor: room.color,
-            opacity,
-            borderColor: room.color,
-            borderWidth: strokeWidth,
           }}
         >
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!wizardActive) setSelectedRoomId(room.id);
+            }}
+            className={`absolute inset-0 rounded-full border-2 ${!isPreview && !wizardActive ? "cursor-pointer" : ""}`}
+            style={{
+              backgroundColor: hexToRgba(room.color, bgOpacity),
+              borderColor: room.color,
+              borderWidth: strokeWidth,
+            }}
+          />
           {!isPreview && room.name && (
             <span
-              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-xs font-semibold px-1 rounded whitespace-nowrap"
-              style={{ backgroundColor: room.color, color: "white" }}
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-xs font-semibold px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap z-10"
+              style={{ backgroundColor: "white", color: "#111827", border: `2px solid ${room.color}` }}
             >
               {room.name}
             </span>
@@ -481,15 +498,29 @@ export default function Home() {
             style={{ pointerEvents: isPreview || wizardActive ? "none" : "auto", cursor: "pointer" }}
           />
           {!isPreview && room.name && room.path[0] && (
-            <text
-              x={`${room.path[0].x}%`}
-              y={`${room.path[0].y}%`}
-              fill="white"
-              fontSize="12"
-              fontWeight="bold"
-            >
-              <tspan>{room.name}</tspan>
-            </text>
+            <g>
+              <rect
+                x={`${room.path[0].x - 1}%`}
+                y={`${room.path[0].y - 14}%`}
+                width="auto"
+                height="18"
+                fill="white"
+                stroke={room.color}
+                strokeWidth="2"
+                rx="3"
+                style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.1))" }}
+              />
+              <text
+                x={`${room.path[0].x}%`}
+                y={`${room.path[0].y - 2}%`}
+                fill="#111827"
+                fontSize="12"
+                fontWeight="600"
+                style={{ paintOrder: "stroke", stroke: "white", strokeWidth: "3px" }}
+              >
+                {room.name}
+              </text>
+            </g>
           )}
         </svg>
       );
@@ -541,6 +572,11 @@ export default function Home() {
         onOwnershipValuesSkip={ownershipHandler.handleOwnershipValuesSkip}
         startAssetRegisterWizard={ownershipHandler.startAssetRegisterWizard}
         startAddRoom={() => setWizardActive(true)}
+        onAddAssetGroup={registerManager.addAssetGroup}
+        onAddSingleAsset={async () => {
+          const group = await registerManager.getOrCreateUncategorizedGroup();
+          openAssetWizard(group.id);
+        }}
         onImportNext={csvOperations.handleImportNext}
         onImportSkip={csvOperations.handleImportSkip}
         onImportEdit={csvOperations.handleImportEdit}
@@ -582,6 +618,7 @@ export default function Home() {
       onSelectSuggestion={handleSelectSuggestion}
       onCreateRegister={handleCreateRegister}
       onEdit={handleEdit}
+      onDelete={registerManager.deleteRegister}
       onCancelCreate={() => {
         setIsCreating(false);
         setAddress("");

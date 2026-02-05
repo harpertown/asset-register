@@ -1,17 +1,17 @@
-import type { Room } from "~/types";
+import type { Room, Asset } from "~/types";
 
 interface IncompleteItemsSectionProps {
   register: any;
   incompleteSectionExpanded: boolean;
   setIncompleteSectionExpanded: (expanded: boolean) => void;
-  openAssetWizard: (roomId: string) => void;
+  onEditAsset: (roomId: string, asset: Asset) => void;
 }
 
 export default function IncompleteItemsSection({
   register,
   incompleteSectionExpanded,
   setIncompleteSectionExpanded,
-  openAssetWizard
+  onEditAsset
 }: IncompleteItemsSectionProps) {
   const hasIncompleteItems = register.rooms.some((room: Room) => 
     room.assets.some(asset => asset.incomplete)
@@ -45,23 +45,36 @@ export default function IncompleteItemsSection({
         <ul className="space-y-2 mt-2">
           {register.rooms.flatMap((room: Room) =>
             room.assets
-              .filter((asset: any) => asset.incomplete)
-              .map((asset: any) => (
-                <li
-                  key={asset.id}
-                  className="flex items-center justify-between px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg"
-                >
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-amber-600 font-medium">{asset.name}</span>
-                  </div>
-                  <button
-                    onClick={() => openAssetWizard(room.id)}
-                    className="px-3 py-1 text-sm bg-amber-600 text-white rounded hover:bg-amber-700 transition-colors"
+              .filter((asset: Asset) => asset.incomplete)
+              .map((asset: Asset) => {
+                // Determine what's missing
+                const missingFields: string[] = [];
+                if (!asset.purchasePrice) missingFields.push("value");
+                if (!asset.purchaseDate) missingFields.push("date");
+                if (!asset.depnRateAcc || !asset.depnRateTax) missingFields.push("depreciation");
+                
+                return (
+                  <li
+                    key={asset.id}
+                    className="flex items-center justify-between px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg"
                   >
-                    Complete
-                  </button>
-                </li>
-              ))
+                    <div className="flex flex-col gap-1">
+                      <span className="text-amber-700 font-medium">{asset.name}</span>
+                      {missingFields.length > 0 && (
+                        <span className="text-xs text-amber-600">
+                          Missing: {missingFields.join(", ")}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => onEditAsset(room.id, asset)}
+                      className="px-3 py-1 text-sm bg-amber-600 text-white rounded hover:bg-amber-700 transition-colors"
+                    >
+                      Fix
+                    </button>
+                  </li>
+                );
+              })
           )}
         </ul>
       )}

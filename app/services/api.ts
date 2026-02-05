@@ -139,7 +139,7 @@ export const apiService = {
     id: string;
     assetId?: string;
     itemType?: string;
-    name: string;
+    name?: string;
     serialNumber?: string;
     purchasePrice?: number;
     purchaseDate?: string;

@@ -61,13 +61,24 @@ export interface Register {
 }
 
 export interface Transaction {
+  id: string; // internal asset id for reference
+  roomId: string; // for updating
   assetId: string;
   assetCategory: string;
   assetDescription: string;
   recordDate: string;
   effectiveDate: string;
+  purchaseDate: string; // raw ISO date for editing
   financialMonth: number;
   financialYear: number;
+  purchasePrice: number;
+  // Depreciation fields
+  depnMethodAcc?: string;
+  depnRateAcc?: string;
+  depnMethodTax?: string;
+  depnRateTax?: string;
+  incomplete?: boolean;
+}
 }
 
 export type WizardStep = "question" | "addItem";

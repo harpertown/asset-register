@@ -9,6 +9,7 @@ interface DrawingToolbarProps {
   colors: string[];
   onStartWizard: () => void;
   onAddRoom: () => void;
+  onAddSingleAsset: () => void;
   onDoneDrawing: () => void;
   onExportCSV: () => void;
   onImportCSV: () => void;
@@ -27,6 +28,7 @@ export default function DrawingToolbar({
   colors,
   onStartWizard,
   onAddRoom,
+  onAddSingleAsset,
   onDoneDrawing,
   onExportCSV,
   onImportCSV,
@@ -78,6 +80,12 @@ export default function DrawingToolbar({
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             Add Room
+          </button>
+          <button
+            onClick={onAddSingleAsset}
+            className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+          >
+            Add Single Asset
           </button>
           <button
             onClick={onExportCSV}
