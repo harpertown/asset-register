@@ -162,84 +162,89 @@ export default function RegisterEditingView({
         </div>
       )}
 
-      {register.sitePlan ? (
+      {(register.sitePlan || register.wizardCompleted) ? (
         <div className="flex flex-col items-center gap-4 w-full max-w-5xl">
-          {/* Toolbar */}
-          <DrawingToolbar
-            wizardActive={wizardActive}
-            selectedTool={selectedTool}
-            setSelectedTool={setSelectedTool}
-            selectedColor={selectedColor}
-            setSelectedColor={setSelectedColor}
-            colors={colors}
-            onStartWizard={startAssetRegisterWizard}
-            onAddRoom={startAddRoom}
-            onDoneDrawing={() => {
-              setWizardActive(false);
-              setSelectedRoomId(null);
-            }}
-            onExportCSV={onExportCSV}
-            onImportCSV={() => importFileInputRef.current?.click()}
-            onRemoveSitePlan={onRemoveSitePlan}
-            importFileInputRef={importFileInputRef}
-            onImportFileChange={onCSVImport}
-            registerCompleted={register.wizardCompleted ?? false}
-          />
+          {/* Toolbar - only show full toolbar when there's a site plan */}
+          {register.sitePlan ? (
+            <DrawingToolbar
+              wizardActive={wizardActive}
+              selectedTool={selectedTool}
+              setSelectedTool={setSelectedTool}
+              selectedColor={selectedColor}
+              setSelectedColor={setSelectedColor}
+              colors={colors}
+              onStartWizard={startAssetRegisterWizard}
+              onAddRoom={startAddRoom}
+              onDoneDrawing={() => {
+                setWizardActive(false);
+                setSelectedRoomId(null);
+              }}
+              onExportCSV={onExportCSV}
+              onImportCSV={() => importFileInputRef.current?.click()}
+              onRemoveSitePlan={onRemoveSitePlan}
+              importFileInputRef={importFileInputRef}
+              onImportFileChange={onCSVImport}
+              registerCompleted={register.wizardCompleted ?? false}
+            />
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+              >
+                Add Site Plan
+              </button>
+              <button
+                onClick={onExportCSV}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+              >
+                Export CSV
+              </button>
+              <button
+                onClick={() => importFileInputRef.current?.click()}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+              >
+                Import CSV
+              </button>
+              <input
+                ref={importFileInputRef}
+                type="file"
+                accept=".csv"
+                onChange={onCSVImport}
+                className="hidden"
+              />
+            </div>
+          )}
 
-          {wizardActive && (
+          {wizardActive && register.sitePlan && (
             <p className="text-sm text-blue-600">
               Draw on the site plan to mark rooms. Use {selectedTool === "rectangle" ? "click and drag to draw rectangles" : selectedTool === "circle" ? "click and drag to draw circles" : "click and drag to draw freeform shapes"}.
             </p>
           )}
 
           {/* Site plan with drawing canvas */}
-          <div
-            ref={canvasRef}
-            onMouseDown={onMouseDown}
-            onMouseMove={onMouseMove}
-            onMouseUp={onMouseUp}
-            onMouseLeave={onMouseUp}
-            className={`relative border border-gray-300 rounded-lg overflow-hidden select-none ${
-              wizardActive ? "cursor-crosshair" : ""
-            }`}
-          >
-            <img
-              src={register.sitePlan}
-              alt="Site Plan"
-              className="max-w-full max-h-[60vh] object-contain"
-              draggable={false}
-            />
-            {/* Render existing rooms */}
-            {register.rooms.map((room) => renderShape(room))}
-            {/* Render preview shape */}
-            {previewShape && renderShape(previewShape, true)}
-          </div>
-
-          {/* Ownership Wizard Modal */}
-          {ownershipWizard.state.isOpen && (
-            <OwnershipWizardModal
-              ownershipWizardStep={ownershipWizard.state.step}
-              ownsLand={ownershipWizard.state.ownsLand}
-              setOwnsLand={ownershipWizard.actions.setOwnsLand}
-              ownsBuildings={ownershipWizard.state.ownsBuildings}
-              setOwnsBuildings={ownershipWizard.actions.setOwnsBuildings}
-              landValue={ownershipWizard.state.landValue}
-              setLandValue={ownershipWizard.actions.setLandValue}
-              landPurchaseDate={ownershipWizard.state.landPurchaseDate}
-              setLandPurchaseDate={ownershipWizard.actions.setLandPurchaseDate}
-              buildingsValue={ownershipWizard.state.buildingsValue}
-              setBuildingsValue={ownershipWizard.actions.setBuildingsValue}
-              buildingsPurchaseDate={ownershipWizard.state.buildingsPurchaseDate}
-              setBuildingsPurchaseDate={ownershipWizard.actions.setBuildingsPurchaseDate}
-              onClose={ownershipWizard.actions.closeWizard}
-              onQuestionsNext={onOwnershipQuestionsNext}
-              onValuesSkip={onOwnershipValuesSkip}
-              onContinue={onOwnershipWizardContinue}
-              onBack={() => ownershipWizard.actions.setStep("questions")}
-              onSkip={onOwnershipWizardSkip}
-              ownsLandDisabled={false}
-              ownsBuildingsDisabled={false}
-            />
+          {register.sitePlan && (
+            <div
+              ref={canvasRef}
+              onMouseDown={onMouseDown}
+              onMouseMove={onMouseMove}
+              onMouseUp={onMouseUp}
+              onMouseLeave={onMouseUp}
+              className={`relative border border-gray-300 rounded-lg overflow-hidden select-none ${
+                wizardActive ? "cursor-crosshair" : ""
+              }`}
+            >
+              <img
+                src={register.sitePlan}
+                alt="Site Plan"
+                className="max-w-full max-h-[60vh] object-contain"
+                draggable={false}
+              />
+              {/* Render existing rooms */}
+              {register.rooms.map((room) => renderShape(room))}
+              {/* Render preview shape */}
+              {previewShape && renderShape(previewShape, true)}
+            </div>
           )}
 
           {/* Room naming modal */}
@@ -401,6 +406,12 @@ export default function RegisterEditingView({
             <p className="text-gray-500">Click to upload site plan</p>
             <p className="text-gray-400 text-sm">PNG, JPG up to 10MB</p>
           </div>
+          <button
+            onClick={startAssetRegisterWizard}
+            className="text-gray-500 hover:text-gray-700 underline text-sm"
+          >
+            Skip — I don't have a site plan
+          </button>
         </div>
       )}
 
@@ -411,6 +422,33 @@ export default function RegisterEditingView({
         onChange={onFileUpload}
         className="hidden"
       />
+
+      {/* Ownership Wizard Modal - rendered outside conditional so it works when skipping site plan */}
+      {ownershipWizard.state.isOpen && (
+        <OwnershipWizardModal
+          ownershipWizardStep={ownershipWizard.state.step}
+          ownsLand={ownershipWizard.state.ownsLand}
+          setOwnsLand={ownershipWizard.actions.setOwnsLand}
+          ownsBuildings={ownershipWizard.state.ownsBuildings}
+          setOwnsBuildings={ownershipWizard.actions.setOwnsBuildings}
+          landValue={ownershipWizard.state.landValue}
+          setLandValue={ownershipWizard.actions.setLandValue}
+          landPurchaseDate={ownershipWizard.state.landPurchaseDate}
+          setLandPurchaseDate={ownershipWizard.actions.setLandPurchaseDate}
+          buildingsValue={ownershipWizard.state.buildingsValue}
+          setBuildingsValue={ownershipWizard.actions.setBuildingsValue}
+          buildingsPurchaseDate={ownershipWizard.state.buildingsPurchaseDate}
+          setBuildingsPurchaseDate={ownershipWizard.actions.setBuildingsPurchaseDate}
+          onClose={ownershipWizard.actions.closeWizard}
+          onQuestionsNext={onOwnershipQuestionsNext}
+          onValuesSkip={onOwnershipValuesSkip}
+          onContinue={onOwnershipWizardContinue}
+          onBack={() => ownershipWizard.actions.setStep("questions")}
+          onSkip={onOwnershipWizardSkip}
+          ownsLandDisabled={false}
+          ownsBuildingsDisabled={false}
+        />
+      )}
 
       <button
         onClick={onBack}
