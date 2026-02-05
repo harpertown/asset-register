@@ -99,7 +99,7 @@ export function parseCSVForImport(csvText: string): ParsedCSVAsset[] {
 		const purchaseDate = parseDate(dateStr);
 
 		assets.push({
-			id: `import-${Date.now()}-${i}`,
+			id: crypto.randomUUID(),
 			assetId: values[assetIdIndex] || "",
 			itemType: values[categoryIndex] || "",
 			name: name,

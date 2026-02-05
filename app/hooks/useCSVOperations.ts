@@ -120,7 +120,7 @@ export function useCSVOperations({
     const groupName = `imported ${timestamp}`;
 
     // Create new asset group
-    const groupId = `import-${Date.now()}`;
+    const groupId = crypto.randomUUID();
     const newRoom: Room = {
       id: groupId,
       name: groupName,
@@ -147,7 +147,7 @@ export function useCSVOperations({
 
         // Prepare all assets for batch creation
         const assetsToCreate = importWizard.state.importedAssets.map((asset, index) => {
-          const assetId = `asset-${Date.now()}-${index}`;
+          const assetId = crypto.randomUUID();
           return {
             id: assetId,
             assetId: asset.assetId || undefined,

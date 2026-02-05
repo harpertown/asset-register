@@ -346,7 +346,7 @@ export default function Home() {
           incomplete: isIncomplete,
         });
       } else {
-        const newAssetId = `asset-${Date.now()}`;
+        const newAssetId = crypto.randomUUID();
         await registerManager.addAsset(roomId, {
           id: newAssetId,
           assetId: formAssetId.trim() || undefined,

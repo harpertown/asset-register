@@ -186,7 +186,7 @@ export function useRegisterManager(): UseRegisterManagerReturn {
     if (editingIndex === null) throw new Error("No register selected");
 
     const newRoom: Room = {
-      id: `group-${Date.now()}`,
+      id: crypto.randomUUID(),
       name,
       tool: "rectangle",
       color,
@@ -231,7 +231,7 @@ export function useRegisterManager(): UseRegisterManagerReturn {
 
     // Create the Uncategorized group
     const newRoom: Room = {
-      id: `uncategorized-${Date.now()}`,
+      id: crypto.randomUUID(),
       name: "Uncategorized",
       tool: "rectangle",
       color: "#6b7280", // gray-500

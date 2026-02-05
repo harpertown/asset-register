@@ -149,6 +149,7 @@ export const apiService = {
     depnRateAcc?: string;
     depnMethodTax?: string;
     depnRateTax?: string;
+    exemptionType?: string;
   }): Promise<{ success: boolean }> {
     const res = await fetch("/api/registers", {
       method: "POST",
@@ -156,5 +157,47 @@ export const apiService = {
       body: JSON.stringify({ action: "update_asset", ...data }),
     });
     return handleResponse(res, "Failed to update asset");
+  },
+
+  async createAssetVersion(originalAssetId: string, updates: {
+    assetId?: string;
+    itemType?: string;
+    name?: string;
+    serialNumber?: string;
+    purchasePrice?: number;
+    purchaseDate?: string;
+    photo?: string;
+    incomplete?: boolean;
+    depnMethodAcc?: string;
+    depnRateAcc?: string;
+    depnMethodTax?: string;
+    depnRateTax?: string;
+    exemptionType?: string;
+    effectiveFrom?: string;
+  }): Promise<{ id: string; version: number; effectiveFrom: string; success: boolean }> {
+    const res = await fetch("/api/registers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "create_asset_version", originalAssetId, ...updates }),
+    });
+    return handleResponse(res, "Failed to create asset version");
+  },
+
+  async getAssetVersions(assetId: string): Promise<{ versions: Asset[] }> {
+    const res = await fetch("/api/registers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "get_asset_versions", assetId }),
+    });
+    return handleResponse(res, "Failed to get asset versions");
+  },
+
+  async deleteAssetVersion(assetId: string): Promise<{ success: boolean; deletedId: string }> {
+    const res = await fetch("/api/registers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete_asset_version", assetId }),
+    });
+    return handleResponse(res, "Failed to delete asset version");
   },
 };

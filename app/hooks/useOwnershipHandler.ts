@@ -66,11 +66,11 @@ export function useOwnershipHandler({
     if (!existingWholeSite) {
       // Create a Whole Site entry
       const wholeSiteAssets: Asset[] = [];
-      const wholeSiteRoomId = `whole-site-${Date.now()}`;
+      const wholeSiteRoomId = crypto.randomUUID();
 
       if (ownsLand) {
         wholeSiteAssets.push({
-          id: `land-${Date.now()}`,
+          id: crypto.randomUUID(),
           itemType: "Property",
           name: "Land",
           serialNumber: "",
@@ -82,7 +82,7 @@ export function useOwnershipHandler({
 
       if (ownsBuildings) {
         wholeSiteAssets.push({
-          id: `buildings-${Date.now() + 1}`,
+          id: crypto.randomUUID(),
           itemType: "Property",
           name: "Buildings",
           serialNumber: "",
@@ -214,11 +214,11 @@ export function useOwnershipHandler({
     if (!existingWholeSite) {
       // Create a Whole Site entry with incomplete assets
       const wholeSiteAssets: Asset[] = [];
-      const wholeSiteRoomId = `whole-site-${Date.now()}`;
+      const wholeSiteRoomId = crypto.randomUUID();
 
       if (ownsLand) {
         wholeSiteAssets.push({
-          id: `land-${Date.now()}`,
+          id: crypto.randomUUID(),
           itemType: "Property",
           name: "Land",
           serialNumber: "",
@@ -230,7 +230,7 @@ export function useOwnershipHandler({
 
       if (ownsBuildings) {
         wholeSiteAssets.push({
-          id: `buildings-${Date.now() + 1}`,
+          id: crypto.randomUUID(),
           itemType: "Property",
           name: "Buildings",
           serialNumber: "",
@@ -325,7 +325,7 @@ async function handleLandAsset(
   const landAssetIndex = existingAssets.findIndex(a => a.name === "Land");
   if (ownsLand) {
     const landAsset: Asset = {
-      id: landAssetIndex !== -1 ? existingAssets[landAssetIndex].id : `land-${Date.now()}`,
+      id: landAssetIndex !== -1 ? existingAssets[landAssetIndex].id : crypto.randomUUID(),
       assetId: landAssetIndex !== -1 ? existingAssets[landAssetIndex].assetId : undefined,
       itemType: "Property",
       name: "Land",
@@ -389,7 +389,7 @@ async function handleBuildingsAsset(
   const buildingsAssetIndex = existingAssets.findIndex(a => a.name === "Buildings");
   if (ownsBuildings) {
     const buildingsAsset: Asset = {
-      id: buildingsAssetIndex !== -1 ? existingAssets[buildingsAssetIndex].id : `buildings-${Date.now()}`,
+      id: buildingsAssetIndex !== -1 ? existingAssets[buildingsAssetIndex].id : crypto.randomUUID(),
       assetId: buildingsAssetIndex !== -1 ? existingAssets[buildingsAssetIndex].assetId : undefined,
       itemType: "Property",
       name: "Buildings",

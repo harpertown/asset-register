@@ -1,5 +1,5 @@
 import type { Room, WizardStep, Asset } from "~/types";
-import { formatCurrency } from "~/utils";
+import { formatCurrency, formatPriceInput, parsePriceInput } from "~/utils";
 import ModalWrapper from "./ModalWrapper";
 import { useClickOutside } from "~/hooks";
 
@@ -218,12 +218,16 @@ export default function AssetWizardModal({
                   )}
                 </label>
                 <input
-                  type="number"
-                  value={state.purchasePrice}
-                  onChange={(e) => onFieldChange("purchasePrice", e.target.value)}
+                  type="text"
+                  inputMode="decimal"
+                  value={formatPriceInput(state.purchasePrice)}
+                  onChange={(e) => {
+                    const raw = parsePriceInput(e.target.value);
+                    if (/^\d*\.?\d*$/.test(raw)) {
+                      onFieldChange("purchasePrice", raw);
+                    }
+                  }}
                   placeholder="0.00"
-                  min="0"
-                  step="0.01"
                   className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-gray-900 ${
                     (!state.purchasePrice || parseFloat(state.purchasePrice) === 0)
                       ? "border-amber-300 focus:ring-amber-400 bg-amber-50"

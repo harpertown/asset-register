@@ -1,3 +1,5 @@
+
+
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router";
 import React from "react";
@@ -5,7 +7,7 @@ import { apiService } from "~/services/api";
 import { calculateDepreciationSchedule, calculateCategorySummary } from "~/services/depreciationService";
 import type { Register, Transaction } from "~/types";
 import type { DepreciationSchedule, CategorySummary } from "~/services/depreciationService";
-import { formatCurrency, currencyCellStyle, calculateFinancialPeriod, formatDate } from "~/utils";
+import { formatCurrency, currencyCellStyle, calculateFinancialPeriod, formatDate, formatPriceInput, parsePriceInput } from "~/utils";
 
 export function meta() {
 	return [
@@ -17,8 +19,38 @@ export function meta() {
 export default function Transactions() {
 	const { registerId } = useParams<{ registerId: string }>();
 	const navigate = useNavigate();
-	const [register, setRegister] = useState<Register | null>(null);
+
+	// Delete a report by index
+	const handleDeleteReport = (index: number) => {
+		setGeneratedReports(prev => prev.filter((_, i) => i !== index));
+		// Also reset compare selection if needed
+		setCompareReport1(prev => (prev === index ? null : prev && prev > index ? prev - 1 : prev));
+		setCompareReport2(prev => (prev === index ? null : prev && prev > index ? prev - 1 : prev));
+	};
+
+	// Declare transactions state before any reference
 	const [transactions, setTransactions] = useState<Transaction[]>([]);
+
+	// Helper: Map assetGuid to Transaction for label lookup
+	const assetLabelMap = useMemo(() => {
+		const map = new Map<string, { category: string; description: string }>();
+		transactions.forEach(tx => {
+			if (tx.assetGuid) {
+				   map.set(tx.assetGuid, {
+					   category: tx.assetCategory || "",
+					   description: tx.assetDescription || ""
+				   });
+			}
+		});
+		return map;
+	}, [transactions]);
+
+	function getAssetLabel(assetGuid: string) {
+		const entry = assetLabelMap.get(assetGuid);
+		if (!entry) return assetGuid;
+		return `${entry.category} - ${entry.description}`;
+	}
+	const [register, setRegister] = useState<Register | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [registerIndex, setRegisterIndex] = useState<number | null>(null);
@@ -32,9 +64,46 @@ export default function Transactions() {
 	const [depnMethodTax, setDepnMethodTax] = useState("");
 	const [depnRateTax, setDepnRateTax] = useState("");
 
+	// Exemption process modal state
+	const [showExemptionModal, setShowExemptionModal] = useState(false);
+	const [exemptionSearchQuery, setExemptionSearchQuery] = useState("");
+	const [selectedExemptionAsset, setSelectedExemptionAsset] = useState<Transaction | null>(null);
+	const [selectedExemptionType, setSelectedExemptionType] = useState<string | null>(null);
+	const [exemptionEffectiveMonth, setExemptionEffectiveMonth] = useState(() => {
+		const now = new Date();
+		return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+	});
+	const [showExemptionConfirm, setShowExemptionConfirm] = useState(false);
+	const [isSavingExemption, setIsSavingExemption] = useState(false);
+
+	// Sorting state for main assets table
+	const [sortColumn, setSortColumn] = useState<string | null>("assetId");
+	const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+
+	// Sorting state for FY Working view
+	const [fySortColumn, setFySortColumn] = useState<string | null>("assetId");
+	const [fySortDirection, setFySortDirection] = useState<"asc" | "desc">("asc");
+
 	// Depreciation calculation state
 	const [showDepreciationModal, setShowDepreciationModal] = useState(false);
 	const [depreciationResults, setDepreciationResults] = useState<(DepreciationSchedule | CategorySummary)[]>([]);
+	const [generatedReports, setGeneratedReports] = useState<{ timestamp: string; versionIds: string }[]>(() => {
+		// Load from localStorage on initial render
+		if (typeof window !== "undefined") {
+			const stored = localStorage.getItem(`assetReports_${registerId}`);
+			if (stored) {
+				try {
+					return JSON.parse(stored);
+				} catch {
+					return [];
+				}
+			}
+		}
+		return [];
+	});
+	const [compareReport1, setCompareReport1] = useState<number | null>(null);
+	const [compareReport2, setCompareReport2] = useState<number | null>(null);
+	const [showCompareModal, setShowCompareModal] = useState(false);
 	const [financialYear, setFinancialYear] = useState(() => {
 		// Calculate current financial year dynamically (NZ FY ends March 31)
 		const now = new Date();
@@ -72,6 +141,103 @@ export default function Transactions() {
 		[depreciationResults, depreciationType]
 	);
 
+	// Sort handler for main assets table
+	const handleSort = (column: string) => {
+		if (sortColumn === column) {
+			setSortDirection(d => d === "asc" ? "desc" : "asc");
+		} else {
+			setSortColumn(column);
+			setSortDirection("asc");
+		}
+	};
+
+	// Sort handler for FY Working view
+	const handleFySort = (column: string) => {
+		if (fySortColumn === column) {
+			setFySortDirection(d => d === "asc" ? "desc" : "asc");
+		} else {
+			setFySortColumn(column);
+			setFySortDirection("asc");
+		}
+	};
+
+	// Sorted transactions for main table
+	const sortedTransactions = useMemo(() => {
+		if (!sortColumn) return transactions;
+		return [...transactions].sort((a, b) => {
+			let aVal: any = a[sortColumn as keyof Transaction];
+			let bVal: any = b[sortColumn as keyof Transaction];
+			// Handle incomplete status specially
+			if (sortColumn === "incomplete") {
+				aVal = a.incomplete ? 1 : 0;
+				bVal = b.incomplete ? 1 : 0;
+			}
+			if (aVal == null) aVal = "";
+			if (bVal == null) bVal = "";
+			if (typeof aVal === "number" && typeof bVal === "number") {
+				return sortDirection === "asc" ? aVal - bVal : bVal - aVal;
+			}
+			const aStr = String(aVal).toLowerCase();
+			const bStr = String(bVal).toLowerCase();
+			return sortDirection === "asc" ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr);
+		});
+	}, [transactions, sortColumn, sortDirection]);
+
+	// Sorted FY Working results
+	const sortedScheduleAccountingResults = useMemo(() => {
+		if (!fySortColumn) return scheduleAccountingResults;
+		return [...scheduleAccountingResults].sort((a, b) => {
+			let aVal: any = a[fySortColumn as keyof DepreciationSchedule];
+			let bVal: any = b[fySortColumn as keyof DepreciationSchedule];
+			if (aVal == null) aVal = "";
+			if (bVal == null) bVal = "";
+			if (typeof aVal === "number" && typeof bVal === "number") {
+				return fySortDirection === "asc" ? aVal - bVal : bVal - aVal;
+			}
+			const aStr = String(aVal).toLowerCase();
+			const bStr = String(bVal).toLowerCase();
+			return fySortDirection === "asc" ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr);
+		});
+	}, [scheduleAccountingResults, fySortColumn, fySortDirection]);
+
+	const sortedScheduleTaxResults = useMemo(() => {
+		if (!fySortColumn) return scheduleTaxResults;
+		return [...scheduleTaxResults].sort((a, b) => {
+			let aVal: any = a[fySortColumn as keyof DepreciationSchedule];
+			let bVal: any = b[fySortColumn as keyof DepreciationSchedule];
+			if (aVal == null) aVal = "";
+			if (bVal == null) bVal = "";
+			if (typeof aVal === "number" && typeof bVal === "number") {
+				return fySortDirection === "asc" ? aVal - bVal : bVal - aVal;
+			}
+			const aStr = String(aVal).toLowerCase();
+			const bStr = String(bVal).toLowerCase();
+			return fySortDirection === "asc" ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr);
+		});
+	}, [scheduleTaxResults, fySortColumn, fySortDirection]);
+
+	// Sortable header component
+	const SortableHeader = ({ column, label, sort, direction, onSort, className = "" }: {
+		column: string;
+		label: string;
+		sort: string | null;
+		direction: "asc" | "desc";
+		onSort: (col: string) => void;
+		className?: string;
+	}) => (
+		<th 
+			className={`px-4 py-3 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 select-none ${className}`}
+			onClick={() => onSort(column)}
+		>
+			<div className="flex items-center gap-1">
+				{label}
+				<span className="text-gray-400 text-xs">
+					{sort === column ? (direction === "asc" ? "▲" : "▼") : "○"}
+				</span>
+			</div>
+		</th>
+	);
+
 	const loadData = useCallback(async () => {
 		try {
 			setIsLoading(true);
@@ -103,6 +269,8 @@ export default function Transactions() {
 						id: asset.id,
 						roomId: room.id,
 						assetId: asset.assetId || "",
+						assetGuid: asset.assetGuid || asset.id,
+						versionId: asset.versionId || asset.id,
 						assetCategory: cat,
 						assetDescription: desc,
 						recordDate: formatDate(asset.purchaseDate),
@@ -135,6 +303,13 @@ export default function Transactions() {
 	}, [loadData]);
 
 	useEffect(() => { loadData(); }, [loadData]);
+
+	// Persist generated reports to localStorage
+	useEffect(() => {
+		if (registerId) {
+			localStorage.setItem(`assetReports_${registerId}`, JSON.stringify(generatedReports));
+		}
+	}, [registerId, generatedReports]);
 
 	const openFixIssuesModal = (tx: Transaction) => {
 		setEditingAsset(tx);
@@ -211,6 +386,137 @@ export default function Transactions() {
 		setShowDepreciationModal(true);
 	};
 
+	// Exemption process handlers
+	const openExemptionModal = () => {
+		setShowExemptionModal(true);
+		setExemptionSearchQuery("");
+		setSelectedExemptionAsset(null);
+		setSelectedExemptionType(null);
+		setShowExemptionConfirm(false);
+	};
+
+	const closeExemptionModal = () => {
+		setShowExemptionModal(false);
+		setExemptionSearchQuery("");
+		setSelectedExemptionAsset(null);
+		setSelectedExemptionType(null);
+		setShowExemptionConfirm(false);
+	};
+
+	const selectExemptionAsset = (tx: Transaction) => {
+		setSelectedExemptionAsset(tx);
+		setExemptionSearchQuery("");
+	};
+
+	const selectExemptionType = (type: string) => {
+		setSelectedExemptionType(type);
+		setShowExemptionConfirm(true);
+	};
+
+	const filteredExemptionAssets = useMemo(() => {
+		if (!exemptionSearchQuery.trim()) return [];
+		const query = exemptionSearchQuery.toLowerCase();
+		return transactions.filter(tx => 
+			tx.assetDescription.toLowerCase().includes(query) ||
+			tx.assetId?.toLowerCase().includes(query) ||
+			tx.assetCategory.toLowerCase().includes(query)
+		).slice(0, 10); // Limit to 10 results
+	}, [transactions, exemptionSearchQuery]);
+
+	const exemptionTypes = [
+		{ id: "Disposal", label: "Disposal", description: "Asset has been sold or scrapped" },
+		{ id: "Revaluation", label: "Revaluation", description: "Asset value has been reassessed" },
+		{ id: "Impairment", label: "Impairment", description: "Asset value has decreased" },
+		{ id: "Improvement", label: "Improvement", description: "Asset has been upgraded or enhanced" },
+		{ id: "Marked unavailable for use", label: "Marked unavailable for use", description: "Asset is temporarily unavailable" },
+		{ id: "Marked available for use", label: "Marked available for use", description: "Asset is available for use again" },
+		{ id: "Change depn method or value", label: "Change depn method or value", description: "Recalculation, previous calculation remains" },
+		{ id: "Reclassify asset category", label: "Reclassify asset category", description: "Recalculation, previous calculation remains" },
+	];
+
+	const handleConfirmExemption = async () => {
+		if (!selectedExemptionAsset || !selectedExemptionType) return;
+		
+		setIsSavingExemption(true);
+		try {
+			// Convert month selection to first day of month (YYYY-MM-01)
+			const effectiveFrom = `${exemptionEffectiveMonth}-01`;
+			
+			await apiService.createAssetVersion(selectedExemptionAsset.id, {
+				exemptionType: selectedExemptionType,
+				effectiveFrom,
+			});
+			
+			// Reload to reflect changes
+			await loadData();
+			closeExemptionModal();
+		} catch (err) {
+			console.error("Failed to create asset version:", err);
+		} finally {
+			setIsSavingExemption(false);
+		}
+	};
+
+	const handleGenerateReport = () => {
+		// Only output versionId for each asset
+		const versionIds = transactions.map(tx => tx.versionId).join("/");
+		const timestamp = new Date().toLocaleString();
+		setGeneratedReports(prev => [...prev, { timestamp, versionIds }]);
+	};
+
+	const handleCompareReports = () => {
+		if (compareReport1 !== null && compareReport2 !== null) {
+			setShowCompareModal(true);
+		}
+	};
+
+	const getComparisonResults = () => {
+		if (compareReport1 === null || compareReport2 === null) return { changed: [], added: [], removed: [] };
+
+		const report1 = generatedReports[compareReport1];
+		const report2 = generatedReports[compareReport2];
+
+		// Parse reports into arrays of versionIds
+		const parseReport = (report: string) => report.split("/").filter(Boolean);
+
+		const versionIds1 = parseReport(report1.versionIds);
+		const versionIds2 = parseReport(report2.versionIds);
+
+		// Map versionId to assetGuid for lookup
+		const versionToAssetGuid = new Map<string, string>();
+		transactions.forEach(tx => {
+			if (tx.versionId && tx.assetGuid) {
+				versionToAssetGuid.set(tx.versionId, tx.assetGuid);
+			}
+		});
+
+		// Find changed (in both, but different assetGuid), added (in 2 not 1), removed (in 1 not 2)
+		const set1 = new Set(versionIds1);
+		const set2 = new Set(versionIds2);
+
+		// Changed: versionId in both, but assetGuid differs (shouldn't happen if versionId is unique per asset, but keep for robustness)
+		const changed: { assetGuid: string; version1: string; version2: string }[] = [];
+		// Added: versionId in 2 not 1
+		const added: { assetGuid: string; versionId: string }[] = [];
+		// Removed: versionId in 1 not 2
+		const removed: { assetGuid: string; versionId: string }[] = [];
+
+		// For this app, treat added/removed as versionId + assetGuid
+		versionIds1.forEach(versionId => {
+			if (!set2.has(versionId)) {
+				removed.push({ assetGuid: versionToAssetGuid.get(versionId) || versionId, versionId });
+			}
+		});
+		versionIds2.forEach(versionId => {
+			if (!set1.has(versionId)) {
+				added.push({ assetGuid: versionToAssetGuid.get(versionId) || versionId, versionId });
+			}
+		});
+
+		// No real 'changed' in this model, but keep for compatibility
+		return { changed, added, removed };
+	};
+
 	if (isLoading) {
 		return (
 			<div className="min-h-screen bg-white flex flex-col items-center justify-center py-8 px-4">
@@ -245,6 +551,9 @@ export default function Transactions() {
 						<button onClick={() => loadData()} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
 							Refresh
 						</button>
+						<button onClick={openExemptionModal} className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700">
+							Exemption Process
+						</button>
 						<button onClick={handleFYWorking} className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
 							FY Working
 						</button>
@@ -263,20 +572,20 @@ export default function Transactions() {
 						<table className="w-full text-sm text-left">
 							<thead className="bg-gray-50 border-b border-gray-200">
 								<tr>
-									<th className="px-4 py-3 font-medium text-gray-900">Status</th>
-									<th className="px-4 py-3 font-medium text-gray-900">Asset ID</th>
-									<th className="px-4 py-3 font-medium text-gray-900">Asset category</th>
-									<th className="px-4 py-3 font-medium text-gray-900">Asset description</th>
-									<th className="px-4 py-3 font-medium text-gray-900">Purchase Price</th>
-									<th className="px-4 py-3 font-medium text-gray-900">Acc Method</th>
-									<th className="px-4 py-3 font-medium text-gray-900">Acc Rate</th>
-									<th className="px-4 py-3 font-medium text-gray-900">Tax Method</th>
-									<th className="px-4 py-3 font-medium text-gray-900">Tax Rate</th>
+									<SortableHeader column="incomplete" label="Status" sort={sortColumn} direction={sortDirection} onSort={handleSort} />
+									<SortableHeader column="assetId" label="Asset ID" sort={sortColumn} direction={sortDirection} onSort={handleSort} />
+									<SortableHeader column="assetCategory" label="Asset category" sort={sortColumn} direction={sortDirection} onSort={handleSort} />
+									<SortableHeader column="assetDescription" label="Asset description" sort={sortColumn} direction={sortDirection} onSort={handleSort} />
+									<SortableHeader column="purchasePrice" label="Purchase Price" sort={sortColumn} direction={sortDirection} onSort={handleSort} />
+									<SortableHeader column="depnMethodAcc" label="Acc Method" sort={sortColumn} direction={sortDirection} onSort={handleSort} />
+									<SortableHeader column="depnRateAcc" label="Acc Rate" sort={sortColumn} direction={sortDirection} onSort={handleSort} />
+									<SortableHeader column="depnMethodTax" label="Tax Method" sort={sortColumn} direction={sortDirection} onSort={handleSort} />
+									<SortableHeader column="depnRateTax" label="Tax Rate" sort={sortColumn} direction={sortDirection} onSort={handleSort} />
 									<th className="px-4 py-3 font-medium text-gray-900">Actions</th>
 								</tr>
 							</thead>
 							<tbody>
-								{transactions.map((tx, i) => {
+								{sortedTransactions.map((tx, i) => {
 									const missingDepreciation = !tx.depnMethodAcc || !tx.depnRateAcc || !tx.depnMethodTax || !tx.depnRateTax;
 									const missingInfo = !tx.purchasePrice || !tx.effectiveDate;
 									const hasIssues = tx.incomplete || missingDepreciation;
@@ -389,12 +698,16 @@ export default function Transactions() {
 												Purchase Price
 											</label>
 											<input
-												type="number"
-												value={editPurchasePrice}
-												onChange={(e) => setEditPurchasePrice(e.target.value)}
+												type="text"
+												inputMode="decimal"
+												value={formatPriceInput(editPurchasePrice)}
+												onChange={(e) => {
+													const raw = parsePriceInput(e.target.value);
+													if (/^\d*\.?\d*$/.test(raw)) {
+														setEditPurchasePrice(raw);
+													}
+												}}
 												placeholder="0.00"
-												step="0.01"
-												min="0"
 												className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white ${!editPurchasePrice ? 'border-amber-300' : 'border-gray-300'}`}
 											/>
 										</div>
@@ -515,6 +828,160 @@ export default function Transactions() {
 					</div>
 				)}
 
+				{/* Exemption Process Modal */}
+				{showExemptionModal && (
+					<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+						<div className="bg-white rounded-lg p-6 shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto min-h-[400px]">
+							<div className="flex items-center justify-between mb-4">
+								<h2 className="text-xl font-semibold text-gray-900">
+									Exemption Process
+								</h2>
+								<button
+									onClick={closeExemptionModal}
+									className="text-gray-400 hover:text-gray-600"
+								>
+									<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+									</svg>
+								</button>
+							</div>
+
+							{/* Step 1: Search and select asset */}
+							{!selectedExemptionAsset && (
+								<div>
+									<p className="text-sm text-gray-600 mb-3">
+										Search for an asset to process:
+									</p>
+									<div className="relative">
+										<input
+											type="text"
+											value={exemptionSearchQuery}
+											onChange={(e) => setExemptionSearchQuery(e.target.value)}
+											placeholder="Search by name, ID, or category..."
+											className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-white"
+											autoFocus
+										/>
+										{filteredExemptionAssets.length > 0 && (
+											<div className="w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-y-auto">
+												{filteredExemptionAssets.map((tx) => (
+													<button
+														key={tx.id}
+														onClick={() => selectExemptionAsset(tx)}
+														className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+													>
+														<div className="font-medium text-gray-900">{tx.assetDescription}</div>
+														<div className="text-sm text-gray-500">
+															{tx.assetId && <span className="mr-3">ID: {tx.assetId}</span>}
+															<span>{tx.assetCategory}</span>
+														</div>
+													</button>
+												))}
+											</div>
+										)}
+									</div>
+									{exemptionSearchQuery && filteredExemptionAssets.length === 0 && (
+										<p className="text-sm text-gray-500 mt-2">No assets found matching "{exemptionSearchQuery}"</p>
+									)}
+								</div>
+							)}
+
+							{/* Step 2: Select exemption type */}
+							{selectedExemptionAsset && !showExemptionConfirm && (
+								<div>
+									<div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+										<div className="flex items-center justify-between">
+											<div>
+												<p className="font-medium text-gray-900">{selectedExemptionAsset.assetDescription}</p>
+												<p className="text-sm text-gray-600">{selectedExemptionAsset.assetCategory}</p>
+												{selectedExemptionAsset.assetId && (
+													<p className="text-sm text-gray-500">ID: {selectedExemptionAsset.assetId}</p>
+												)}
+											</div>
+											<button
+												onClick={() => setSelectedExemptionAsset(null)}
+												className="text-amber-600 hover:text-amber-700 text-sm"
+											>
+												Change
+											</button>
+										</div>
+									</div>
+
+									<p className="text-sm text-gray-600 mb-4">
+										Select the type of exemption to create a new version:
+									</p>
+
+									<div className="space-y-2">
+										{exemptionTypes.map((type) => (
+											<button
+												key={type.id}
+												onClick={() => selectExemptionType(type.id)}
+												className="w-full p-4 text-left border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-amber-300 transition-colors"
+											>
+												<div className="font-medium text-gray-900">{type.label}</div>
+												<div className="text-sm text-gray-500">{type.description}</div>
+											</button>
+										))}
+									</div>
+								</div>
+							)}
+
+							{/* Step 3: Confirmation dialog */}
+							{showExemptionConfirm && selectedExemptionAsset && selectedExemptionType && (
+								<div>
+									<div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+										<h3 className="font-medium text-gray-900 mb-2">Confirm New Version</h3>
+										<div className="space-y-2 text-sm">
+											<p><span className="text-gray-600">Asset:</span> <span className="font-medium text-gray-900">{selectedExemptionAsset.assetDescription}</span></p>
+											{selectedExemptionAsset.assetId && (
+												<p><span className="text-gray-600">Asset ID:</span> <span className="font-medium text-gray-900">{selectedExemptionAsset.assetId}</span></p>
+											)}
+											<p><span className="text-gray-600">Exemption Type:</span> <span className="font-medium text-amber-700">{selectedExemptionType}</span></p>
+										</div>
+									</div>
+
+									<div className="mb-4">
+										<label className="block text-sm font-medium text-gray-700 mb-1">
+											Effective Month
+										</label>
+										<input
+											type="month"
+											value={exemptionEffectiveMonth}
+											onChange={(e) => setExemptionEffectiveMonth(e.target.value)}
+											className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-white"
+										/>
+										<p className="text-xs text-gray-500 mt-1">
+											Effective date will be the 1st of the selected month ({exemptionEffectiveMonth}-01)
+										</p>
+									</div>
+
+									<p className="text-sm text-gray-600 mb-6">
+										This will create a new version of the asset with the exemption type "{selectedExemptionType}". The current version will be preserved in history.
+									</p>
+
+									<div className="flex gap-3 justify-end">
+										<button
+											onClick={() => {
+												setSelectedExemptionType(null);
+												setShowExemptionConfirm(false);
+											}}
+											className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+										>
+											Back
+										</button>
+										<button
+											onClick={handleConfirmExemption}
+											disabled={isSavingExemption}
+											className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50"
+										>
+											{isSavingExemption ? "Creating..." : "Confirm & Create Version"}
+										</button>
+									</div>
+								</div>
+							)}
+						</div>
+					</div>
+				)}
+
 				{/* Depreciation Results Modal */}
 				{showDepreciationModal && (
 					<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -538,12 +1005,31 @@ export default function Transactions() {
 									{/* FY Working - Month by Month Schedule */}
 									{/* Accounting Classification Section */}
 									<div className="mb-8">
-										<h3 className="text-lg font-semibold text-gray-900 mb-4">Accounting Classification</h3>
+										<div className="flex items-center justify-between mb-4">
+											<h3 className="text-lg font-semibold text-gray-900">Accounting Classification</h3>
+											<button
+												onClick={handleGenerateReport}
+												className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+											>
+												Generate Report
+											</button>
+										</div>
 										<div className="overflow-x-auto">
 											<table className="w-full border-collapse text-xs">
 												<thead>
 													<tr className="bg-gray-50">
-														<th className="px-2 py-2 text-left text-sm font-medium text-gray-700 border-b" rowSpan={2}>Assets</th>
+														<th 
+															className="px-2 py-2 text-left text-sm font-medium text-gray-700 border-b cursor-pointer hover:bg-gray-100 select-none" 
+															rowSpan={2}
+															onClick={() => handleFySort("assetId")}
+														>
+															<div className="flex items-center gap-1">
+																Assets
+																<span className="text-gray-400 text-xs">
+																	{fySortColumn === "assetId" ? (fySortDirection === "asc" ? "▲" : "▼") : "○"}
+																</span>
+															</div>
+														</th>
 														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>Month One</th>
 														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>Month Two</th>
 														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>Month Three</th>
@@ -579,7 +1065,7 @@ export default function Transactions() {
 													</tr>
 												</thead>
 												<tbody>
-													{scheduleAccountingResults.map((result, index) => (
+													{sortedScheduleAccountingResults.map((result, index) => (
 														<tr key={index} className="border-b hover:bg-gray-50">
 															<td className="px-2 py-1 text-xs text-gray-900 font-medium">{result.assetId || "-"}</td>
 															{result.months.map((month, monthIndex) => (
@@ -672,7 +1158,18 @@ export default function Transactions() {
 											<table className="w-full border-collapse text-xs">
 												<thead>
 													<tr className="bg-gray-50">
-														<th className="px-2 py-2 text-left text-sm font-medium text-gray-700 border-b" rowSpan={2}>Assets</th>
+														<th 
+															className="px-2 py-2 text-left text-sm font-medium text-gray-700 border-b cursor-pointer hover:bg-gray-100 select-none" 
+															rowSpan={2}
+															onClick={() => handleFySort("assetId")}
+														>
+															<div className="flex items-center gap-1">
+																Assets
+																<span className="text-gray-400 text-xs">
+																	{fySortColumn === "assetId" ? (fySortDirection === "asc" ? "▲" : "▼") : "○"}
+																</span>
+															</div>
+														</th>
 														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>Month One</th>
 														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>Month Two</th>
 														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>Month Three</th>
@@ -708,7 +1205,7 @@ export default function Transactions() {
 													</tr>
 												</thead>
 												<tbody>
-															{scheduleTaxResults.map((result, index) => (
+															{sortedScheduleTaxResults.map((result, index) => (
 																<tr key={index} className="border-b hover:bg-gray-50">
 																	<td className="px-2 py-1 text-xs text-gray-900 font-medium">{result.assetId || "-"}</td>
 																	{result.months.map((month, monthIndex) => (
@@ -793,6 +1290,71 @@ export default function Transactions() {
 											</table>
 										</div>
 									</div>
+
+									{/* Reports Section */}
+									{generatedReports.length > 0 && (
+										<div className="mt-8 border-t pt-6">
+											<h3 className="text-lg font-semibold text-gray-900 mb-4">Reports</h3>
+											
+											{/* Compare Reports Controls */}
+											{generatedReports.length >= 2 && (
+												<div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+													<div className="flex flex-wrap items-center gap-3">
+														<span className="text-sm font-medium text-gray-700">Compare:</span>
+														<select
+															value={compareReport1 ?? ""}
+															onChange={(e) => setCompareReport1(e.target.value ? Number(e.target.value) : null)}
+															className="px-3 py-1.5 border border-gray-300 rounded text-sm text-black bg-white"
+														>
+															<option value="">Select Report</option>
+															{generatedReports.map((_, index) => (
+																<option key={index} value={index}>Report #{index + 1}</option>
+															))}
+														</select>
+														<span className="text-sm text-gray-500">with</span>
+														<select
+															value={compareReport2 ?? ""}
+															onChange={(e) => setCompareReport2(e.target.value ? Number(e.target.value) : null)}
+															className="px-3 py-1.5 border border-gray-300 rounded text-sm text-black bg-white"
+														>
+															<option value="">Select Report</option>
+															{generatedReports.map((_, index) => (
+																<option key={index} value={index}>Report #{index + 1}</option>
+															))}
+														</select>
+														<button
+															onClick={handleCompareReports}
+															disabled={compareReport1 === null || compareReport2 === null || compareReport1 === compareReport2}
+															className="px-4 py-1.5 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+														>
+															Compare
+														</button>
+													</div>
+												</div>
+											)}
+
+											<div className="space-y-3">
+												{generatedReports.map((report, index) => (
+													<div key={index} className="p-4 bg-gray-50 rounded-lg border">
+														<div className="flex items-center justify-between mb-2">
+															<span className="font-medium text-gray-900">Report #{index + 1}</span>
+															<span className="text-sm text-gray-500">{report.timestamp}</span>
+															<button
+																onClick={() => handleDeleteReport(index)}
+																className="ml-4 px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+																title="Delete this report"
+															>
+																Delete
+															</button>
+														</div>
+														<div className="text-xs text-gray-600 font-mono break-all">
+															{report.versionIds}
+														</div>
+													</div>
+												))}
+											</div>
+										</div>
+									)}
 								</>
 							) : (
 								<>
@@ -919,6 +1481,109 @@ export default function Transactions() {
 									Close
 								</button>
 							</div>
+						</div>
+					</div>
+				)}
+
+				{/* Compare Reports Modal */}
+				{showCompareModal && compareReport1 !== null && compareReport2 !== null && (
+					<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+						<div className="bg-white rounded-lg p-6 shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+							<div className="flex items-center justify-between mb-4">
+								<h2 className="text-xl font-semibold text-gray-900">
+									Compare Reports: #{compareReport1 + 1} vs #{compareReport2 + 1}
+								</h2>
+								<button
+									onClick={() => setShowCompareModal(false)}
+									className="text-gray-400 hover:text-gray-600"
+								>
+									<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+									</svg>
+								</button>
+							</div>
+
+							{(() => {
+								const { changed, added, removed } = getComparisonResults();
+								const hasNoChanges = (!changed || changed.length === 0) && (!added || added.length === 0) && (!removed || removed.length === 0);
+
+								return (
+									<div className="space-y-6">
+										{hasNoChanges ? (
+											<div className="p-4 bg-green-50 border border-green-200 rounded-lg text-center">
+												<p className="text-green-700 font-medium">No differences found between the two reports.</p>
+											</div>
+										) : (
+											<>
+												{/* Added Assets */}
+												{added && added.length > 0 && (
+													<div>
+														<h3 className="text-md font-semibold text-black mb-3 flex items-center gap-2">
+															<span className="w-3 h-3 bg-green-500 rounded-full"></span>
+															New Assets in Report #{compareReport2 + 1} ({added.length})
+														</h3>
+														<div className="overflow-x-auto">
+															<table className="w-full border-collapse text-sm">
+																<thead>
+																	<tr className="bg-green-50">
+																		<th className="px-4 py-2 text-left font-medium text-gray-700 border-b">Asset ID</th>
+																		<th className="px-4 py-2 text-left font-medium text-gray-700 border-b">Version ID</th>
+																	</tr>
+																</thead>
+																<tbody>
+																	{added.map((item, index) => (
+																		<tr key={index} className="border-b hover:bg-green-50/50">
+																			  <td className="px-4 py-2 text-gray-900">{getAssetLabel(item.assetGuid)}</td>
+																			<td className="px-4 py-2 text-gray-900 font-mono">{item.versionId}</td>
+																		</tr>
+																	))}
+																</tbody>
+															</table>
+														</div>
+													</div>
+												)}
+
+												{/* Removed Assets */}
+												{removed && removed.length > 0 && (
+													<div>
+														<h3 className="text-md font-semibold text-black mb-3 flex items-center gap-2">
+															<span className="w-3 h-3 bg-red-500 rounded-full"></span>
+															Removed from Report #{compareReport2 + 1} ({removed.length})
+														</h3>
+														<div className="overflow-x-auto">
+															<table className="w-full border-collapse text-sm">
+																<thead>
+																	<tr className="bg-red-50">
+																		<th className="px-4 py-2 text-left font-medium text-gray-700 border-b">Asset ID</th>
+																		<th className="px-4 py-2 text-left font-medium text-gray-700 border-b">Version ID</th>
+																	</tr>
+																</thead>
+																<tbody>
+																	{removed.map((item, index) => (
+																		<tr key={index} className="border-b hover:bg-red-50/50">
+																			  <td className="px-4 py-2 text-gray-900">{getAssetLabel(item.assetGuid)}</td>
+																			<td className="px-4 py-2 text-gray-900 font-mono">{item.versionId}</td>
+																		</tr>
+																	))}
+																</tbody>
+															</table>
+														</div>
+													</div>
+												)}
+											</>
+										)}
+
+										<div className="flex gap-3 justify-end pt-4 border-t">
+											<button
+												onClick={() => setShowCompareModal(false)}
+												className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+											>
+												Close
+											</button>
+										</div>
+									</div>
+								);
+							})()}
 						</div>
 					</div>
 				)}

@@ -78,35 +78,35 @@ function calculateByMethod(
 	method: string, 
 	months: number
 ): number {
-	if (!method || method.toLowerCase() === "non-depreciable") {
+	const methodLower = method.toLowerCase();
+	
+	// Non-depreciable
+	if (methodLower === "nd" || methodLower.includes("non-dep")) {
 		return 0;
 	}
 
-	if (method.toLowerCase() === "low-value write-off") {
-		return price; // Full write-off in first year
+	// Low-value write-off: full depreciation immediately
+	if (methodLower === "lv" || methodLower.includes("low-value")) {
+		return price;
 	}
 
-	if (method.toLowerCase().includes("straight-line")) {
-		// Straight-line: (Cost × Rate) / 12 × months
-		return (price * rate * months) / 12;
+	// Straight-line: (Cost × Rate) / 12 × months, capped at original price
+	if (methodLower === "sl" || methodLower.includes("straight")) {
+		const monthlyDepn = (price * rate) / 12;
+		const totalDepn = monthlyDepn * months;
+		return Math.min(totalDepn, price); // Can't depreciate more than the asset cost
 	}
 
-	if (method.toLowerCase().includes("diminishing")) {
-		// Diminishing value: Book Value × Rate × (months / 12)
+	// Diminishing value: compound monthly depreciation
+	if (methodLower === "dv" || methodLower.includes("diminishing") || methodLower.includes("declining")) {
 		let bookValue = price;
 		let totalDepreciation = 0;
-		const years = months / 12;
+		const monthlyRate = rate / 12;
 
-		for (let i = 0; i < years; i++) {
-			const yearlyDepreciation = bookValue * rate;
-			totalDepreciation += yearlyDepreciation;
-			bookValue -= yearlyDepreciation;
-		}
-
-		// Add partial year depreciation
-		const partialMonths = months % 12;
-		if (partialMonths > 0) {
-			totalDepreciation += bookValue * rate * (partialMonths / 12);
+		for (let i = 0; i < months && bookValue > 0; i++) {
+			const monthlyDepn = bookValue * monthlyRate;
+			totalDepreciation += monthlyDepn;
+			bookValue -= monthlyDepn;
 		}
 
 		return totalDepreciation;
@@ -216,15 +216,24 @@ function calculateFinancialPeriod(dateString?: string): { month: number; year: s
 }
 
 /**
- * Calculate monthly depreciation
+ * Calculate monthly depreciation for straight-line method
+ * For SL: same amount each month = (Original Cost × Annual Rate) / 12
+ * Depreciation stops when book value reaches 0
  */
-function calculateMonthlyDepreciation(bookValue: number, rate: number, method: string): number {
-	if (method.includes("straight") || method.includes("sl")) {
-		return bookValue * rate / 12;
-	} else if (method.includes("diminishing") || method.includes("dv") || method.includes("declining")) {
-		return bookValue * rate / 12;
-	}
-	return 0;
+function calculateMonthlyDepreciationSL(originalCost: number, currentBookValue: number, annualRate: number): number {
+	if (currentBookValue <= 0) return 0;
+	const monthlyDepn = (originalCost * annualRate) / 12;
+	// Don't depreciate below 0
+	return Math.min(monthlyDepn, currentBookValue);
+}
+
+/**
+ * Calculate monthly depreciation for diminishing value method
+ * For DV: depreciation is based on current book value = (Book Value × Annual Rate) / 12
+ */
+function calculateMonthlyDepreciationDV(currentBookValue: number, annualRate: number): number {
+	if (currentBookValue <= 0) return 0;
+	return (currentBookValue * annualRate) / 12;
 }
 
 /**
@@ -242,7 +251,13 @@ export function calculateDepreciationSchedule(
 
 	// Use 0% rate if no rate specified
 	const rate = depnRate ? parseRate(depnRate) : 0;
-	const method = depnMethod ? depnMethod.toLowerCase() : "straight-line";
+	const method = depnMethod ? depnMethod.toLowerCase() : "sl";
+
+	// Check for special methods
+	const isNonDepreciable = method === "nd" || method.includes("non-dep");
+	const isLowValue = method === "lv" || method.includes("low-value");
+	const isStraightLine = method === "sl" || method.includes("straight");
+	// Default to diminishing value if not straight-line
 
 	// Calculate the financial month when the asset was acquired
 	const acquisitionFinancialPeriod = calculateFinancialPeriod(asset.purchaseDate);
@@ -266,7 +281,23 @@ export function calculateDepreciationSchedule(
 
 		// Calculate depreciation on the book value (opening + acquisitions)
 		const bookValue = openingValue + acquisitions;
-		const monthDepn = calculateMonthlyDepreciation(bookValue, rate, method);
+		let monthDepn = 0;
+
+		if (isNonDepreciable) {
+			monthDepn = 0;
+		} else if (isLowValue) {
+			// Low-value write-off: full depreciation in acquisition month
+			if (month === acquisitionMonth) {
+				monthDepn = purchasePrice;
+			}
+		} else if (isStraightLine) {
+			// Straight-line: same amount each month based on original cost
+			monthDepn = calculateMonthlyDepreciationSL(purchasePrice, bookValue, rate);
+		} else {
+			// Diminishing value: based on current book value
+			monthDepn = calculateMonthlyDepreciationDV(bookValue, rate);
+		}
+
 		const closingValue = Math.max(0, bookValue - monthDepn);
 
 		months.push({

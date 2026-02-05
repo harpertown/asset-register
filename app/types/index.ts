@@ -29,6 +29,13 @@ export interface Asset {
   depnRateAcc?: string;
   depnMethodTax?: string;
   depnRateTax?: string;
+  // Versioning fields
+  version?: number;
+  versionId?: string;
+  assetGuid?: string;
+  parentAssetId?: string | null;
+  effectiveFrom?: string;
+  exemptionType?: string;
 }
 
 export interface Room {
@@ -64,6 +71,8 @@ export interface Transaction {
   id: string; // internal asset id for reference
   roomId: string; // for updating
   assetId: string;
+  assetGuid?: string; // persistent asset identity
+  versionId?: string; // version-specific id
   assetCategory: string;
   assetDescription: string;
   recordDate: string;

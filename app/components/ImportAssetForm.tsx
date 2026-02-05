@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { formatPriceInput, parsePriceInput } from "~/utils";
 
 interface ImportAssetFormProps {
   asset: any;
@@ -109,10 +110,15 @@ export default function ImportAssetForm({
             Purchase Price (NZD) *
           </label>
           <input
-            type="number"
-            step="0.01"
-            value={editedAsset.purchasePrice || ""}
-            onChange={(e) => handleChange("purchasePrice", parseFloat(e.target.value) || 0)}
+            type="text"
+            inputMode="decimal"
+            value={formatPriceInput(editedAsset.purchasePrice?.toString() || "")}
+            onChange={(e) => {
+              const raw = parsePriceInput(e.target.value);
+              if (/^\d*\.?\d*$/.test(raw)) {
+                handleChange("purchasePrice", parseFloat(raw) || 0);
+              }
+            }}
             className={getInputClass(editedAsset.purchasePrice, true)}
             placeholder="0.00"
           />
