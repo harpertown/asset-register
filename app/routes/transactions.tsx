@@ -269,11 +269,11 @@ export default function Transactions() {
 													<tr className="bg-gray-50">
 														{Array(12).fill(0).map((_, i) => (
 															<React.Fragment key={i}>
-																<th className="px-1 py-1 text-center text-xs font-medium text-gray-600 border-b" style={currencyCellStyle}>Open</th>
+																<th className="pl-3 pr-1 py-1 text-center text-xs font-medium text-gray-600 border-b" style={currencyCellStyle}>Open</th>
 																<th className="px-1 py-1 text-center text-xs font-medium text-gray-600 border-b" style={currencyCellStyle}>Revalns</th>
 																<th className="px-1 py-1 text-center text-xs font-medium text-gray-600 border-b" style={currencyCellStyle}>Acq</th>
 																<th className="px-1 py-1 text-center text-xs font-medium text-gray-600 border-b" style={currencyCellStyle}>Disp</th>
-																<th className="px-1 py-1 text-center text-xs font-medium text-gray-600 border-b border-r border-r-gray-300" style={currencyCellStyle}>Depn</th>
+																<th className="pl-1 pr-3 py-1 text-center text-xs font-medium text-gray-600 border-b border-r border-r-gray-300" style={currencyCellStyle}>Depn</th>
 															</React.Fragment>
 														))}
 														<th className="px-2 py-1 text-center text-xs font-medium text-gray-600 border-b" style={currencyCellStyle}>Open</th>
@@ -290,11 +290,11 @@ export default function Transactions() {
 															<td className="px-2 py-1 text-xs text-gray-900 font-medium">{result.assetId || "-"}</td>
 															{result.months.map((month, monthIndex) => (
 																<React.Fragment key={monthIndex}>
-																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.openingValue === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.openingValue) : "-"}</td>
+																	<td className={`pl-3 pr-1 py-1 text-xs text-gray-900 ${!month || month.openingValue === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.openingValue) : "-"}</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.revalns === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.revalns) : "-"}</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.acquisitions === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.acquisitions) : "-"}</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.disposals === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.disposals) : "-"}</td>
-																	<td className={`px-1 py-1 text-xs text-gray-900 border-r border-r-gray-300 ${!month || month.depn === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.depn) : "-"}</td>
+																	<td className={`pl-1 pr-3 py-1 text-xs text-gray-900 border-r border-r-gray-300 ${!month || month.depn === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.depn) : "-"}</td>
 																</React.Fragment>
 															))}
 															<td className={`px-2 py-1 text-xs text-gray-900 ${result.open === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatCurrency(result.open)}</td>
@@ -317,7 +317,7 @@ export default function Transactions() {
 																const depnTotal = scheduleAccountingResults.reduce((sum, r) => sum + (r.months[i]?.depn || 0), 0);
 															return (
 																<React.Fragment key={i}>
-																	<td className={`px-1 py-1 text-xs text-gray-900 ${openTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
+																	<td className={`pl-3 pr-1 py-1 text-xs text-gray-900 ${openTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
 																		{formatCurrency(openTotal)}
 																	</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${revalsTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
@@ -329,7 +329,7 @@ export default function Transactions() {
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${dispTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
 																		{formatCurrency(dispTotal)}
 																	</td>
-																	<td className={`px-1 py-1 text-xs text-gray-900 border-r border-r-gray-300 ${depnTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
+																	<td className={`pl-1 pr-3 py-1 text-xs text-gray-900 border-r border-r-gray-300 ${depnTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
 																		{formatCurrency(depnTotal)}
 																	</td>
 																</React.Fragment>
@@ -398,11 +398,11 @@ export default function Transactions() {
 													<tr className="bg-gray-50">
 														{Array(12).fill(0).map((_, i) => (
 															<React.Fragment key={i}>
-																<th className="px-1 py-1 text-center text-xs font-medium text-gray-600 border-b" style={currencyCellStyle}>Open</th>
+																<th className="pl-3 pr-1 py-1 text-center text-xs font-medium text-gray-600 border-b" style={currencyCellStyle}>Open</th>
 																<th className="px-1 py-1 text-center text-xs font-medium text-gray-600 border-b" style={currencyCellStyle}>Revalns</th>
 																<th className="px-1 py-1 text-center text-xs font-medium text-gray-600 border-b" style={currencyCellStyle}>Acq</th>
 																<th className="px-1 py-1 text-center text-xs font-medium text-gray-600 border-b" style={currencyCellStyle}>Disp</th>
-																<th className="px-1 py-1 text-center text-xs font-medium text-gray-600 border-b border-r border-r-gray-300" style={currencyCellStyle}>Depn</th>
+																<th className="pl-1 pr-3 py-1 text-center text-xs font-medium text-gray-600 border-b border-r border-r-gray-300" style={currencyCellStyle}>Depn</th>
 															</React.Fragment>
 														))}
 														<th className="px-2 py-1 text-center text-xs font-medium text-gray-600 border-b" style={currencyCellStyle}>Open</th>
@@ -419,11 +419,11 @@ export default function Transactions() {
 																	<td className="px-2 py-1 text-xs text-gray-900 font-medium">{result.assetId || "-"}</td>
 																	{result.months.map((month, monthIndex) => (
 																<React.Fragment key={monthIndex}>
-																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.openingValue === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.openingValue) : "-"}</td>
+																	<td className={`pl-3 pr-1 py-1 text-xs text-gray-900 ${!month || month.openingValue === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.openingValue) : "-"}</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.revalns === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.revalns) : "-"}</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.acquisitions === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.acquisitions) : "-"}</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.disposals === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.disposals) : "-"}</td>
-																	<td className={`px-1 py-1 text-xs text-gray-900 border-r border-r-gray-300 ${!month || month.depn === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.depn) : "-"}</td>
+																	<td className={`pl-1 pr-3 py-1 text-xs text-gray-900 border-r border-r-gray-300 ${!month || month.depn === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.depn) : "-"}</td>
 																</React.Fragment>
 															))}
 															<td className={`px-2 py-1 text-xs text-gray-900 ${result.open === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatCurrency(result.open)}</td>
@@ -446,7 +446,7 @@ export default function Transactions() {
 																const depnTotal = scheduleTaxResults.reduce((sum, r) => sum + (r.months[i]?.depn || 0), 0);
 															return (
 																<React.Fragment key={i}>
-																	<td className={`px-1 py-1 text-xs text-gray-900 ${openTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
+																	<td className={`pl-3 pr-1 py-1 text-xs text-gray-900 ${openTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
 																		{formatCurrency(openTotal)}
 																	</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${revalsTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
@@ -458,7 +458,7 @@ export default function Transactions() {
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${dispTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
 																		{formatCurrency(dispTotal)}
 																	</td>
-																	<td className={`px-1 py-1 text-xs text-gray-900 border-r border-r-gray-300 ${depnTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
+																	<td className={`pl-1 pr-3 py-1 text-xs text-gray-900 border-r border-r-gray-300 ${depnTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
 																		{formatCurrency(depnTotal)}
 																	</td>
 																</React.Fragment>
