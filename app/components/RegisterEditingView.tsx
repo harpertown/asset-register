@@ -207,9 +207,9 @@ export default function RegisterEditingView({
     setSelectedDebugAsset(asset);
     setIsLoadingVersions(true);
     try {
-      // Use versionId if available, otherwise fall back to id
-      const lookupId = asset.versionId || asset.id;
-      const result = await apiService.getAssetVersions(lookupId);
+      // Always use the row id; get_asset_versions expects the asset record id,
+      // not the version GUID.
+      const result = await apiService.getAssetVersions(asset.id);
       if (result.versions.length > 0) {
         setVersionHistory(result.versions);
       } else {

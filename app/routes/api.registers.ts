@@ -363,84 +363,66 @@ export async function action({ request, context }: Route.ActionArgs) {
 				.prepare(`SELECT id, parent_asset_id, asset_guid FROM assets WHERE id = ?`)
 				.bind(payload.assetId)
 				.first();
-			
+            
 			if (!initialAsset) {
+				console.log(`[get_asset_versions] Asset not found for id: ${payload.assetId}`);
 				return Response.json({ versions: [] });
 			}
 
 			// Find the root asset by walking up the parent chain
 			let currentId = payload.assetId;
 			let rootId = currentId;
-			
+			let assetGuid = (initialAsset as any).asset_guid || initialAsset.id;
+
 			// Walk up to find the root (an asset with no parent)
 			for (let i = 0; i < 100; i++) { // Prevent infinite loops
 				const asset = await db
-					.prepare(`SELECT id, parent_asset_id FROM assets WHERE id = ?`)
+					.prepare(`SELECT id, parent_asset_id, asset_guid FROM assets WHERE id = ?`)
 					.bind(currentId)
 					.first();
-				
 				if (!asset) break;
-				
 				if (!(asset as any).parent_asset_id) {
 					rootId = currentId;
+					assetGuid = (asset as any).asset_guid || asset.id;
 					break;
 				}
 				currentId = (asset as any).parent_asset_id;
 				rootId = currentId;
+				assetGuid = (asset as any).asset_guid || asset.id;
 			}
 
-			// Now get all versions: root + all descendants
+			// Get all assets with the same asset_guid
+			const allVersions = await db
+				.prepare(`SELECT * FROM assets WHERE asset_guid = ? ORDER BY version ASC`)
+				.bind(assetGuid)
+				.all();
+
+			console.log(`[get_asset_versions] Queried asset_guid: ${assetGuid}, found ${allVersions.results.length} versions.`);
+
 			const versions: any[] = [];
-			const queue = [rootId];
-			const visited = new Set<string>();
-
-			while (queue.length > 0) {
-				const id = queue.shift()!;
-				if (visited.has(id)) continue;
-				visited.add(id);
-
-				const asset = await db
-					.prepare(`SELECT * FROM assets WHERE id = ?`)
-					.bind(id)
-					.first();
-
-				if (asset) {
-					versions.push({
-						id: (asset as any).id,
-						assetId: (asset as any).asset_id || "",
-						itemType: (asset as any).item_type || "",
-						name: (asset as any).name,
-						serialNumber: (asset as any).serial_number || "",
-						purchasePrice: (asset as any).purchase_price || 0,
-						purchaseDate: (asset as any).purchase_date || "",
-						photo: (asset as any).photo,
-						incomplete: Boolean((asset as any).incomplete),
-						depnMethodAcc: (asset as any).depn_method_acc || "",
-						depnRateAcc: (asset as any).depn_rate_acc || "",
-						depnMethodTax: (asset as any).depn_method_tax || "",
-						depnRateTax: (asset as any).depn_rate_tax || "",
-						version: (asset as any).version || 1,
-						versionId: (asset as any).version_id || (asset as any).id,
-						assetGuid: (asset as any).asset_guid || (asset as any).id,
-						parentAssetId: (asset as any).parent_asset_id || null,
-						effectiveFrom: (asset as any).effective_from || "",
-						exemptionType: (asset as any).exemption_type || ((asset as any).version === 1 || !(asset as any).parent_asset_id ? "Acquisition" : ""),
-					});
-
-					// Find children (assets that have this as parent)
-					const children = await db
-						.prepare(`SELECT id FROM assets WHERE parent_asset_id = ?`)
-						.bind(id)
-						.all();
-
-					for (const child of children.results) {
-						queue.push((child as any).id);
-					}
-				}
+			for (const asset of allVersions.results) {
+				versions.push({
+					id: (asset as any).id,
+					assetId: (asset as any).asset_id || "",
+					itemType: (asset as any).item_type || "",
+					name: (asset as any).name,
+					serialNumber: (asset as any).serial_number || "",
+					purchasePrice: (asset as any).purchase_price || 0,
+					purchaseDate: (asset as any).purchase_date || "",
+					photo: (asset as any).photo,
+					incomplete: Boolean((asset as any).incomplete),
+					depnMethodAcc: (asset as any).depn_method_acc || "",
+					depnRateAcc: (asset as any).depn_rate_acc || "",
+					depnMethodTax: (asset as any).depn_method_tax || "",
+					depnRateTax: (asset as any).depn_rate_tax || "",
+					version: (asset as any).version || 1,
+					versionId: (asset as any).version_id || (asset as any).id,
+					assetGuid: (asset as any).asset_guid || (asset as any).id,
+					parentAssetId: (asset as any).parent_asset_id || null,
+					effectiveFrom: (asset as any).effective_from || "",
+					exemptionType: (asset as any).exemption_type || ((asset as any).version === 1 || !(asset as any).parent_asset_id ? "Acquisition" : ""),
+				});
 			}
-
-			// Sort by version
-			versions.sort((a, b) => (a.version || 1) - (b.version || 1));
 
 			return Response.json({ versions });
 		}

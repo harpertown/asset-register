@@ -12,6 +12,8 @@ export interface DepreciableAsset {
 	depnRateAcc?: string;
 	depnMethodTax?: string;
 	depnRateTax?: string;
+	exemptionType?: string;
+	effectiveFrom?: string;
 }
 
 export interface DepreciationResult {
@@ -262,15 +264,21 @@ export function calculateDepreciationSchedule(
 	// Calculate the financial month when the asset was acquired
 	const acquisitionFinancialPeriod = calculateFinancialPeriod(asset.purchaseDate);
 	const acquisitionMonth = acquisitionFinancialPeriod.month;
+	const disposalMonth =
+		asset.exemptionType === "Disposal" && asset.effectiveFrom
+			? calculateFinancialPeriod(asset.effectiveFrom).month
+			: null;
 
 	// Calculate month-by-month depreciation for the financial year
 	const months: MonthlyDepreciation[] = [];
 	let openingValue = 0;
 	let totalDepn = 0;
 	let totalAdditions = 0;
+	let totalDisposals = 0;
 
 	for (let month = 1; month <= 12; month++) {
 		let acquisitions = 0;
+		let disposals = 0;
 
 		// For the acquisition month, opening value is $0 and acquisitions is the purchase price
 		if (month === acquisitionMonth) {
@@ -283,7 +291,12 @@ export function calculateDepreciationSchedule(
 		const bookValue = openingValue + acquisitions;
 		let monthDepn = 0;
 
-		if (isNonDepreciable) {
+		if (disposalMonth !== null && month === disposalMonth) {
+			// Disposal effective from the start of the month.
+			// Remove the opening book value and stop depreciation for this month.
+			disposals = bookValue;
+			monthDepn = 0;
+		} else if (isNonDepreciable) {
 			monthDepn = 0;
 		} else if (isLowValue) {
 			// Low-value write-off: full depreciation in acquisition month
@@ -298,19 +311,20 @@ export function calculateDepreciationSchedule(
 			monthDepn = calculateMonthlyDepreciationDV(bookValue, rate);
 		}
 
-		const closingValue = Math.max(0, bookValue - monthDepn);
+		const closingValue = Math.max(0, bookValue - monthDepn - disposals);
 
 		months.push({
 			month,
 			openingValue,
 			revalns: 0,
 			acquisitions,
-			disposals: 0,
+			disposals,
 			depn: monthDepn,
 			closingValue,
 		});
 
 		totalDepn += monthDepn;
+		totalDisposals += disposals;
 		openingValue = closingValue;
 	}
 
@@ -322,7 +336,7 @@ export function calculateDepreciationSchedule(
 		open: 0,
 		totalRevals: 0,
 		totalAdditions,
-		totalDisposals: 0,
+		totalDisposals,
 		totalDepn,
 		close: openingValue,
 		calcType: type === "working" ? "accounting" : "tax",
