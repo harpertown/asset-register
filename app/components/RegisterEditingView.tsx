@@ -398,7 +398,7 @@ export default function RegisterEditingView({
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center py-8 px-4">
+    <div className="min-h-screen bg-[#f5f1e8] flex flex-col items-center py-8 px-4">
       <h1 className="text-2xl font-semibold text-gray-900">Edit Register</h1>
       <p className="text-gray-600 mb-6">{register.address}</p>
       {register.wizardCompleted && register.rooms.length > 0 && (

@@ -668,7 +668,7 @@ export default function Transactions() {
 
 	if (isLoading) {
 		return (
-			<div className="min-h-screen bg-white flex flex-col items-center justify-center py-8 px-4">
+			<div className="min-h-screen bg-[#f5f1e8] flex flex-col items-center justify-center py-8 px-4">
 				<div className="text-gray-500">Loading assets...</div>
 			</div>
 		);
@@ -676,7 +676,7 @@ export default function Transactions() {
 
 	if (error) {
 		return (
-			<div className="min-h-screen bg-white flex flex-col items-center justify-center py-8 px-4">
+			<div className="min-h-screen bg-[#f5f1e8] flex flex-col items-center justify-center py-8 px-4">
 				<div className="text-red-600">{error}</div>
 				<button
 					onClick={() => navigate(`/?register=${registerId}`)}
@@ -689,7 +689,7 @@ export default function Transactions() {
 	}
 
 	return (
-		<div className="min-h-screen bg-white flex flex-col items-center py-8 px-4">
+		<div className="min-h-screen bg-[#f5f1e8] flex flex-col items-center py-8 px-4">
 			<div className="w-full max-w-6xl">
 				<div className="flex items-center justify-between mb-6">
 					<div>
@@ -717,8 +717,8 @@ export default function Transactions() {
 				{transactions.length === 0 ? (
 					<div className="text-center py-12 text-gray-500">No assets found for this register.</div>
 				) : (
-					<div className="overflow-x-auto border border-gray-200 rounded-lg">
-						<table className="w-full text-sm text-left">
+					<div className="overflow-x-auto border border-gray-200 rounded-lg bg-white">
+						<table className="w-full text-sm text-left bg-white">
 							<thead className="bg-gray-50 border-b border-gray-200">
 								<tr>
 									<SortableHeader column="incomplete" label="Status" sort={sortColumn} direction={sortDirection} onSort={handleSort} />

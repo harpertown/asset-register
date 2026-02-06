@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useSearchParams } from "react-router";
 import type { Route } from "./+types/home";
 import { calculateDepreciation } from "~/services/depreciationService";
@@ -30,6 +30,7 @@ export function meta({}: Route.MetaArgs) {
 export default function Home() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { showError, showSuccess } = useToast();
+  const view = searchParams.get("view") === "registers" ? "registers" : "home";
   
   // Core register management
   const registerManager = useRegisterManager();
@@ -239,6 +240,18 @@ export default function Home() {
     setWizardActive(false);
     setSelectedRoomId(null);
     assetWizard.actions.closeWizard();
+  };
+
+  const handleViewRegisters = () => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("view", "registers");
+    setSearchParams(nextParams);
+  };
+
+  const handleViewHome = () => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("view");
+    setSearchParams(nextParams);
   };
 
   // File upload
@@ -625,6 +638,9 @@ export default function Home() {
         setSuggestions([]);
         setShowSuggestions(false);
       }}
+      view={view}
+      onViewRegisters={handleViewRegisters}
+      onViewHome={handleViewHome}
       showDepreciationModal={showDepreciationModal}
       depreciationResults={depreciationResults}
       financialYear={financialYear}
