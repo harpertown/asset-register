@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router";
 import React from "react";
 import { apiService } from "~/services/api";
-import { calculateDepreciationSchedule, calculateDepreciationScheduleFromHistory, calculateCategorySummary } from "~/services/depreciationService";
+import { calculateDepreciationScheduleFromHistory, calculateCategorySummaryFromHistory } from "~/services/depreciationService";
 import type { Register, Transaction } from "~/types";
 import type { DepreciationSchedule, CategorySummary } from "~/services/depreciationService";
 import { formatCurrency, currencyCellStyle, calculateFinancialPeriod, formatDate, formatPriceInput, parsePriceInput } from "~/utils";
@@ -416,19 +416,30 @@ export default function Transactions() {
 		}
 	};
 
-	const handleFYRegister = () => {
+	const handleFYRegister = async () => {
 		if (!register) return;
 		setDepreciationType("register");
-		// Calculate summary by asset category for FY Register
-		const categories = ["Land", "Buildings", "Plant and equipment", "Vehicles", "Computer software"];
 		const allAssets = register.rooms.flatMap((room) => room.assets);
-		
-		const accResults = calculateCategorySummary(allAssets, categories, "working");
-		const taxResults = calculateCategorySummary(allAssets, categories, "register");
-		
-		// Combine both results
-		setDepreciationResults([...accResults, ...taxResults]);
-		setShowDepreciationModal(true);
+		try {
+			const histories = await Promise.all(
+				allAssets.map(async (asset) => {
+					try {
+						const result = await apiService.getAssetVersions(asset.id);
+						return result.versions.length > 0 ? result.versions : [asset];
+					} catch {
+						return [asset];
+					}
+				})
+			);
+
+			const accResults = calculateCategorySummaryFromHistory(histories, "working", financialYear);
+			const taxResults = calculateCategorySummaryFromHistory(histories, "register", financialYear);
+
+			setDepreciationResults([...accResults, ...taxResults]);
+			setShowDepreciationModal(true);
+		} catch (err) {
+			console.error("Failed to calculate FY Register:", err);
+		}
 	};
 
 	// Exemption process handlers

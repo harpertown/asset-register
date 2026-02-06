@@ -160,6 +160,7 @@ export default function RegisterEditingView({
   const [showAcquisitionReassignModal, setShowAcquisitionReassignModal] = useState(false);
   const [debugSortDirection, setDebugSortDirection] = useState<"asc" | "desc">("asc");
   const [versionSortMode, setVersionSortMode] = useState<"effective" | "generation">("effective");
+  const [showSitePlan, setShowSitePlan] = useState(false);
 
   const formatCreatedAt = (createdAt?: string) => {
     if (!createdAt) return "Unknown";
@@ -397,26 +398,354 @@ export default function RegisterEditingView({
     }
   };
 
+  const hasWorkspace = Boolean(register.sitePlan || register.wizardCompleted);
+  const showAssetActions = register.wizardCompleted && register.rooms.length > 0;
+  const showSkipWithoutPlan = !register.sitePlan && !register.wizardCompleted;
+
   return (
-    <div className="min-h-screen bg-[#f5f1e8] flex flex-col items-center py-8 px-4">
-      <h1 className="text-2xl font-semibold text-gray-900">Edit Register</h1>
-      <p className="text-gray-600 mb-6">{register.address}</p>
-      {register.wizardCompleted && register.rooms.length > 0 && (
-        <div className="mb-4 flex gap-2">
-          <button
-            onClick={() => navigate(`/transactions/${register.id}`)}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-          >
-            View All Assets
-          </button>
-          <button
-            onClick={() => setShowDebugModal(true)}
-            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-          >
-            Debug Assets
-          </button>
+    <div className="min-h-screen bg-[#f5f1e8] py-8 px-4">
+      <div className="mx-auto w-full max-w-6xl">
+        <div className="mb-6">
+          <h1 className="text-2xl font-semibold text-gray-900">Edit Register</h1>
+          <p className="text-gray-600">{register.address}</p>
         </div>
-      )}
+
+        <div
+          className="w-full"
+          style={{ display: "grid", gridTemplateColumns: "240px minmax(0, 1fr)", gap: "1.5rem", alignItems: "start" }}
+        >
+          <aside
+            className="space-y-4"
+            style={{ width: 240, gridColumn: "1 / 2" }}
+          >
+            {showAssetActions && (
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => navigate(`/transactions/${register.id}`)}
+                  className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  View All Assets
+                </button>
+                <button
+                  onClick={() => setShowDebugModal(true)}
+                  className="w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  Debug Assets
+                </button>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-2">
+              {register.sitePlan ? (
+                <DrawingToolbar
+                  wizardActive={wizardActive}
+                  selectedTool={selectedTool}
+                  setSelectedTool={setSelectedTool}
+                  selectedColor={selectedColor}
+                  setSelectedColor={setSelectedColor}
+                  colors={colors}
+                  onStartWizard={() => {
+                    setShowSitePlan(true);
+                    startAssetRegisterWizard();
+                  }}
+                  onAddRoom={() => {
+                    setShowSitePlan(true);
+                    startAddRoom();
+                  }}
+                  onAddSingleAsset={onAddSingleAsset}
+                  onDoneDrawing={() => {
+                    setWizardActive(false);
+                    setSelectedRoomId(null);
+                    setShowSitePlan(false);
+                  }}
+                  onExportCSV={onExportCSV}
+                  onImportCSV={() => importFileInputRef.current?.click()}
+                  onRemoveSitePlan={onRemoveSitePlan}
+                  importFileInputRef={importFileInputRef}
+                  onImportFileChange={onCSVImport}
+                  registerCompleted={register.wizardCompleted ?? false}
+                  layout="vertical"
+                />
+              ) : hasWorkspace ? (
+                <>
+                  <button
+                    onClick={() => setShowAssetGroupModal(true)}
+                    className="w-full px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm"
+                  >
+                    Add Asset Group
+                  </button>
+                  <button
+                    onClick={onAddSingleAsset}
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                  >
+                    Add Single Asset
+                  </button>
+                  <div className="h-px bg-gray-300 my-1" />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+                  >
+                    Add Site Plan
+                  </button>
+                  <button
+                    onClick={onExportCSV}
+                    className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+                  >
+                    Export CSV
+                  </button>
+                  <button
+                    onClick={() => importFileInputRef.current?.click()}
+                    className="w-full px-4 py-2 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors text-sm"
+                  >
+                    Import CSV
+                  </button>
+                  <input
+                    ref={importFileInputRef}
+                    type="file"
+                    accept=".csv"
+                    onChange={onCSVImport}
+                    className="hidden"
+                  />
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+                  >
+                    Add Site Plan
+                  </button>
+                  {showSkipWithoutPlan && (
+                    <button
+                      onClick={startAssetRegisterWizard}
+                      className="w-full px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+                    >
+                      Skip — I don't have a site plan
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+
+            <button
+              onClick={onBack}
+              className="w-full px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+            >
+              Back
+            </button>
+          </aside>
+
+          <div className="min-w-0" style={{ gridColumn: "2 / 3" }}>
+            {hasWorkspace ? (
+              <div className="flex flex-col items-center gap-4 w-full">
+              {wizardActive && register.sitePlan && showSitePlan && (
+                <p className="text-sm text-blue-600">
+                  Draw on the site plan to mark rooms. Use {selectedTool === "rectangle" ? "click and drag to draw rectangles" : selectedTool === "circle" ? "click and drag to draw circles" : "click and drag to draw freeform shapes"}.
+                </p>
+              )}
+
+          {/* Site plan with drawing canvas */}
+          {register.sitePlan && showSitePlan && (
+            <div
+              ref={canvasRef}
+              onMouseDown={onMouseDown}
+              onMouseMove={onMouseMove}
+              onMouseUp={onMouseUp}
+              onMouseLeave={onMouseUp}
+              className={`relative border border-gray-300 rounded-lg overflow-hidden select-none ${
+                wizardActive ? "cursor-crosshair" : ""
+              }`}
+            >
+              <img
+                src={register.sitePlan}
+                alt="Site Plan"
+                className="max-w-full max-h-[60vh] object-contain"
+                draggable={false}
+              />
+              {/* Render existing rooms */}
+              {register.rooms.map((room) => renderShape(room))}
+              {/* Render preview shape */}
+              {previewShape && renderShape(previewShape, true)}
+            </div>
+          )}
+
+          {/* Room naming modal */}
+          <RoomNamingModal
+            namingRoom={namingRoom}
+            roomName={roomName}
+            onRoomNameChange={setRoomName}
+            onSave={onSaveRoom}
+            onCancel={() => {
+              setNamingRoom(null);
+              setRoomName("");
+            }}
+          />
+
+          {/* Import Wizard Modal */}
+          <ImportWizardModal
+            showImportWizard={importWizard.state.isOpen}
+            importedAssets={importWizard.state.importedAssets}
+            currentImportIndex={importWizard.state.currentIndex}
+            onClose={closeImportWizard}
+            onSave={onImportEdit}
+            onNext={onImportNext}
+            onSkip={onImportSkip}
+            isLast={importWizard.isLastAsset}
+            onEdit={onImportEdit}
+          />
+
+          {/* Confirm Delete Room Modal */}
+          <ConfirmDeleteModal
+            confirmDeleteRoomId={confirmDeleteRoomId}
+            roomName={register.rooms.find(r => r.id === confirmDeleteRoomId)?.name ?? ""}
+            onConfirm={() => {
+              onDeleteRoom(confirmDeleteRoomId!);
+              setConfirmDeleteRoomId(null);
+            }}
+            onCancel={() => setConfirmDeleteRoomId(null)}
+          />
+
+          {/* Asset Wizard Modal */}
+          <AssetWizardModal
+            isOpen={assetWizard.isOpen}
+            wizardRoom={wizardRoom ?? null}
+            step={assetWizard.state.step}
+            isEditing={assetWizard.isEditing}
+            state={{
+              itemType: assetWizard.state.itemType,
+              name: assetWizard.state.name,
+              assetId: assetWizard.state.assetId,
+              serialNumber: assetWizard.state.serialNumber,
+              purchasePrice: assetWizard.state.purchasePrice,
+              purchaseDate: assetWizard.state.purchaseDate,
+              photo: assetWizard.state.photo,
+              itemTypeSuggestions: assetWizard.state.itemTypeSuggestions,
+              showItemTypeSuggestions: assetWizard.state.showItemTypeSuggestions,
+            }}
+            refs={assetWizard.refs}
+            onClose={closeAssetWizard}
+            onYes={onAssetWizardYes}
+            onNo={onAssetWizardNo}
+            onItemTypeChange={onItemTypeChange}
+            onItemTypeSelect={onSelectItemType}
+            onItemTypeFocus={() => {
+              if (assetWizard.state.itemType.length >= 1 && assetWizard.state.itemTypeSuggestions.length > 0) {
+                assetWizard.actions.setField("showItemTypeSuggestions", true);
+              }
+            }}
+            onFieldChange={(field, value) => assetWizard.actions.setField(field as any, value)}
+            onPhotoUpload={onAssetPhotoUpload}
+            onAddAsset={onAddAsset}
+            onEditAsset={(asset) => {
+              assetWizard.actions.populateForEdit({
+                id: asset.id,
+                itemType: asset.itemType || "",
+                name: asset.name,
+                assetId: asset.assetId,
+                serialNumber: asset.serialNumber || "",
+                purchasePrice: asset.purchasePrice,
+                purchaseDate: asset.purchaseDate || "",
+                photo: asset.photo,
+              });
+            }}
+          />
+
+          {/* Selected room actions */}
+          {selectedRoomId && !wizardActive && (
+            <div className="flex items-center gap-2 p-3 bg-gray-100 rounded-lg">
+              <span className="text-gray-700">
+                Selected: {register.rooms.find((r) => r.id === selectedRoomId)?.name}
+              </span>
+              {!register.rooms.find((r) => r.id === selectedRoomId)?.isWholeSite && (
+                <button
+                  onClick={() => onDeleteRoom(selectedRoomId)}
+                  className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
+                >
+                  Delete Room
+                </button>
+              )}
+              <button
+                onClick={() => setSelectedRoomId(null)}
+                className="px-3 py-1 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50 transition-colors"
+              >
+                Deselect
+              </button>
+            </div>
+          )}
+
+          {/* Room list */}
+          <RoomListSection
+            rooms={register.rooms}
+            selectedRoomId={selectedRoomId}
+            wizardActive={wizardActive}
+            assetWizardOpen={assetWizard.isOpen}
+            onRoomClick={setSelectedRoomId}
+            onAddAssets={openAssetWizard}
+            onRemoveRoom={setConfirmDeleteRoomId}
+            onEditAsset={(roomId, asset) => {
+              assetWizard.actions.openWizard(roomId);
+              assetWizard.actions.populateForEdit({
+                id: asset.id,
+                itemType: asset.itemType || "",
+                name: asset.name,
+                assetId: asset.assetId,
+                serialNumber: asset.serialNumber || "",
+                purchasePrice: asset.purchasePrice,
+                purchaseDate: asset.purchaseDate || "",
+                photo: asset.photo,
+              });
+            }}
+            onDeleteAsset={onDeleteAsset}
+          />
+
+          {/* Incomplete Items Section */}
+          <IncompleteItemsSection
+            register={register}
+            incompleteSectionExpanded={incompleteSectionExpanded}
+            setIncompleteSectionExpanded={setIncompleteSectionExpanded}
+            onEditAsset={(roomId, asset) => {
+              assetWizard.actions.openWizard(roomId);
+              assetWizard.actions.populateForEdit({
+                id: asset.id,
+                itemType: asset.itemType || "",
+                name: asset.name,
+                assetId: asset.assetId,
+                serialNumber: asset.serialNumber || "",
+                purchasePrice: asset.purchasePrice,
+                purchaseDate: asset.purchaseDate || "",
+                photo: asset.photo,
+              });
+            }}
+          />
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-4">
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className="w-80 h-48 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 transition-colors"
+          >
+            <svg
+              className="w-12 h-12 text-gray-400 mb-2"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+            <p className="text-gray-500">Click to upload site plan</p>
+            <p className="text-gray-400 text-sm">PNG, JPG up to 10MB</p>
+          </div>
+        </div>
+            )}
+
+          </div>
+        </div>
+      </div>
 
       {/* Debug Assets Modal */}
       {showDebugModal && (
@@ -788,285 +1117,6 @@ export default function RegisterEditingView({
         </div>
       )}
 
-      {(register.sitePlan || register.wizardCompleted) ? (
-        <div className="flex flex-col items-center gap-4 w-full max-w-5xl">
-          {/* Toolbar - only show full toolbar when there's a site plan */}
-          {register.sitePlan ? (
-            <DrawingToolbar
-              wizardActive={wizardActive}
-              selectedTool={selectedTool}
-              setSelectedTool={setSelectedTool}
-              selectedColor={selectedColor}
-              setSelectedColor={setSelectedColor}
-              colors={colors}
-              onStartWizard={startAssetRegisterWizard}
-              onAddRoom={startAddRoom}
-              onAddSingleAsset={onAddSingleAsset}
-              onDoneDrawing={() => {
-                setWizardActive(false);
-                setSelectedRoomId(null);
-              }}
-              onExportCSV={onExportCSV}
-              onImportCSV={() => importFileInputRef.current?.click()}
-              onRemoveSitePlan={onRemoveSitePlan}
-              importFileInputRef={importFileInputRef}
-              onImportFileChange={onCSVImport}
-              registerCompleted={register.wizardCompleted ?? false}
-            />
-          ) : (
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => setShowAssetGroupModal(true)}
-                className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm"
-              >
-                Add Asset Group
-              </button>
-              <button
-                onClick={onAddSingleAsset}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-              >
-                Add Single Asset
-              </button>
-              <div className="w-px h-6 bg-gray-300 mx-1" />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
-              >
-                Add Site Plan
-              </button>
-              <button
-                onClick={onExportCSV}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
-              >
-                Export CSV
-              </button>
-              <button
-                onClick={() => importFileInputRef.current?.click()}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
-              >
-                Import CSV
-              </button>
-              <input
-                ref={importFileInputRef}
-                type="file"
-                accept=".csv"
-                onChange={onCSVImport}
-                className="hidden"
-              />
-            </div>
-          )}
-
-          {wizardActive && register.sitePlan && (
-            <p className="text-sm text-blue-600">
-              Draw on the site plan to mark rooms. Use {selectedTool === "rectangle" ? "click and drag to draw rectangles" : selectedTool === "circle" ? "click and drag to draw circles" : "click and drag to draw freeform shapes"}.
-            </p>
-          )}
-
-          {/* Site plan with drawing canvas */}
-          {register.sitePlan && (
-            <div
-              ref={canvasRef}
-              onMouseDown={onMouseDown}
-              onMouseMove={onMouseMove}
-              onMouseUp={onMouseUp}
-              onMouseLeave={onMouseUp}
-              className={`relative border border-gray-300 rounded-lg overflow-hidden select-none ${
-                wizardActive ? "cursor-crosshair" : ""
-              }`}
-            >
-              <img
-                src={register.sitePlan}
-                alt="Site Plan"
-                className="max-w-full max-h-[60vh] object-contain"
-                draggable={false}
-              />
-              {/* Render existing rooms */}
-              {register.rooms.map((room) => renderShape(room))}
-              {/* Render preview shape */}
-              {previewShape && renderShape(previewShape, true)}
-            </div>
-          )}
-
-          {/* Room naming modal */}
-          <RoomNamingModal
-            namingRoom={namingRoom}
-            roomName={roomName}
-            onRoomNameChange={setRoomName}
-            onSave={onSaveRoom}
-            onCancel={() => {
-              setNamingRoom(null);
-              setRoomName("");
-            }}
-          />
-
-          {/* Import Wizard Modal */}
-          <ImportWizardModal
-            showImportWizard={importWizard.state.isOpen}
-            importedAssets={importWizard.state.importedAssets}
-            currentImportIndex={importWizard.state.currentIndex}
-            onClose={closeImportWizard}
-            onSave={onImportEdit}
-            onNext={onImportNext}
-            onSkip={onImportSkip}
-            isLast={importWizard.isLastAsset}
-            onEdit={onImportEdit}
-          />
-
-          {/* Confirm Delete Room Modal */}
-          <ConfirmDeleteModal
-            confirmDeleteRoomId={confirmDeleteRoomId}
-            roomName={register.rooms.find(r => r.id === confirmDeleteRoomId)?.name ?? ""}
-            onConfirm={() => {
-              onDeleteRoom(confirmDeleteRoomId!);
-              setConfirmDeleteRoomId(null);
-            }}
-            onCancel={() => setConfirmDeleteRoomId(null)}
-          />
-
-          {/* Asset Wizard Modal */}
-          <AssetWizardModal
-            isOpen={assetWizard.isOpen}
-            wizardRoom={wizardRoom ?? null}
-            step={assetWizard.state.step}
-            isEditing={assetWizard.isEditing}
-            state={{
-              itemType: assetWizard.state.itemType,
-              name: assetWizard.state.name,
-              assetId: assetWizard.state.assetId,
-              serialNumber: assetWizard.state.serialNumber,
-              purchasePrice: assetWizard.state.purchasePrice,
-              purchaseDate: assetWizard.state.purchaseDate,
-              photo: assetWizard.state.photo,
-              itemTypeSuggestions: assetWizard.state.itemTypeSuggestions,
-              showItemTypeSuggestions: assetWizard.state.showItemTypeSuggestions,
-            }}
-            refs={assetWizard.refs}
-            onClose={closeAssetWizard}
-            onYes={onAssetWizardYes}
-            onNo={onAssetWizardNo}
-            onItemTypeChange={onItemTypeChange}
-            onItemTypeSelect={onSelectItemType}
-            onItemTypeFocus={() => {
-              if (assetWizard.state.itemType.length >= 1 && assetWizard.state.itemTypeSuggestions.length > 0) {
-                assetWizard.actions.setField("showItemTypeSuggestions", true);
-              }
-            }}
-            onFieldChange={(field, value) => assetWizard.actions.setField(field as any, value)}
-            onPhotoUpload={onAssetPhotoUpload}
-            onAddAsset={onAddAsset}
-            onEditAsset={(asset) => {
-              assetWizard.actions.populateForEdit({
-                id: asset.id,
-                itemType: asset.itemType || "",
-                name: asset.name,
-                assetId: asset.assetId,
-                serialNumber: asset.serialNumber || "",
-                purchasePrice: asset.purchasePrice,
-                purchaseDate: asset.purchaseDate || "",
-                photo: asset.photo,
-              });
-            }}
-          />
-
-          {/* Selected room actions */}
-          {selectedRoomId && !wizardActive && (
-            <div className="flex items-center gap-2 p-3 bg-gray-100 rounded-lg">
-              <span className="text-gray-700">
-                Selected: {register.rooms.find((r) => r.id === selectedRoomId)?.name}
-              </span>
-              {!register.rooms.find((r) => r.id === selectedRoomId)?.isWholeSite && (
-                <button
-                  onClick={() => onDeleteRoom(selectedRoomId)}
-                  className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
-                >
-                  Delete Room
-                </button>
-              )}
-              <button
-                onClick={() => setSelectedRoomId(null)}
-                className="px-3 py-1 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50 transition-colors"
-              >
-                Deselect
-              </button>
-            </div>
-          )}
-
-          {/* Room list */}
-          <RoomListSection
-            rooms={register.rooms}
-            selectedRoomId={selectedRoomId}
-            wizardActive={wizardActive}
-            assetWizardOpen={assetWizard.isOpen}
-            onRoomClick={setSelectedRoomId}
-            onAddAssets={openAssetWizard}
-            onRemoveRoom={setConfirmDeleteRoomId}
-            onEditAsset={(roomId, asset) => {
-              assetWizard.actions.openWizard(roomId);
-              assetWizard.actions.populateForEdit({
-                id: asset.id,
-                itemType: asset.itemType || "",
-                name: asset.name,
-                assetId: asset.assetId,
-                serialNumber: asset.serialNumber || "",
-                purchasePrice: asset.purchasePrice,
-                purchaseDate: asset.purchaseDate || "",
-                photo: asset.photo,
-              });
-            }}
-            onDeleteAsset={onDeleteAsset}
-          />
-
-          {/* Incomplete Items Section */}
-          <IncompleteItemsSection
-            register={register}
-            incompleteSectionExpanded={incompleteSectionExpanded}
-            setIncompleteSectionExpanded={setIncompleteSectionExpanded}
-            onEditAsset={(roomId, asset) => {
-              assetWizard.actions.openWizard(roomId);
-              assetWizard.actions.populateForEdit({
-                id: asset.id,
-                itemType: asset.itemType || "",
-                name: asset.name,
-                assetId: asset.assetId,
-                serialNumber: asset.serialNumber || "",
-                purchasePrice: asset.purchasePrice,
-                purchaseDate: asset.purchaseDate || "",
-                photo: asset.photo,
-              });
-            }}
-          />
-        </div>
-      ) : (
-        <div className="flex flex-col items-center gap-4">
-          <div
-            onClick={() => fileInputRef.current?.click()}
-            className="w-80 h-48 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 transition-colors"
-          >
-            <svg
-              className="w-12 h-12 text-gray-400 mb-2"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
-            <p className="text-gray-500">Click to upload site plan</p>
-            <p className="text-gray-400 text-sm">PNG, JPG up to 10MB</p>
-          </div>
-          <button
-            onClick={startAssetRegisterWizard}
-            className="text-gray-500 hover:text-gray-700 underline text-sm"
-          >
-            Skip — I don't have a site plan
-          </button>
-        </div>
-      )}
-
       <input
         ref={fileInputRef}
         type="file"
@@ -1109,13 +1159,6 @@ export default function RegisterEditingView({
         onSave={handleCreateAssetGroup}
         existingNames={register.rooms.map(r => r.name)}
       />
-
-      <button
-        onClick={onBack}
-        className="mt-6 px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
-      >
-        Back
-      </button>
     </div>
   );
 }

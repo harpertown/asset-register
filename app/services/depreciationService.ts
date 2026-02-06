@@ -704,3 +704,69 @@ export function calculateCategorySummary(
 
 	return results;
 }
+
+function getLatestCategoryForFy(
+	versions: (DepreciableAsset & { parentAssetId?: string | null; version?: number; exemptionType?: string })[],
+	fyEnd: Date
+): string {
+	if (versions.length === 0) return "Uncategorized";
+
+	const events = versions
+		.map((version) => {
+			const eventDate = getEventDate(version) || parseIsoDate(version.effectiveFrom) || parseIsoDate(version.purchaseDate);
+			if (!eventDate) return null;
+			return { version, eventDate };
+		})
+		.filter((event): event is { version: DepreciableAsset & { parentAssetId?: string | null; version?: number; exemptionType?: string }; eventDate: Date } => Boolean(event));
+
+	const fallbackCategory = (versions[versions.length - 1]?.itemType || "").trim() || "Uncategorized";
+	if (events.length === 0) {
+		return fallbackCategory;
+	}
+
+	const withinFy = events.filter((event) => event.eventDate <= fyEnd);
+	const candidates = withinFy.length > 0 ? withinFy : events;
+	candidates.sort((a, b) => {
+		const diff = a.eventDate.getTime() - b.eventDate.getTime();
+		if (diff !== 0) return diff;
+		return ((a.version as any).version || 0) - ((b.version as any).version || 0);
+	});
+
+	const latest = candidates[candidates.length - 1];
+	return (latest.version.itemType || "").trim() || fallbackCategory;
+}
+
+export function calculateCategorySummaryFromHistory(
+	histories: (DepreciableAsset & { parentAssetId?: string | null; version?: number; exemptionType?: string })[][],
+	type: "working" | "register",
+	financialYear: string
+): CategorySummary[] {
+	const { end: fyEnd } = getFyBounds(financialYear);
+	const results = new Map<string, CategorySummary>();
+
+	histories.forEach((versions) => {
+		if (versions.length === 0) return;
+		const schedule = calculateDepreciationScheduleFromHistory(versions, type, financialYear);
+		const category = getLatestCategoryForFy(versions, fyEnd);
+		const existing = results.get(category) ?? {
+			category,
+			openingBookValue: 0,
+			revaluations: 0,
+			additions: 0,
+			disposals: 0,
+			depreciation: 0,
+			closingBookValue: 0,
+			calcType: type === "working" ? "accounting" : "tax",
+		};
+
+		existing.openingBookValue += schedule.open;
+		existing.revaluations += schedule.totalRevals;
+		existing.additions += schedule.totalAdditions;
+		existing.disposals += schedule.totalDisposals;
+		existing.depreciation += schedule.totalDepn;
+		existing.closingBookValue += schedule.close;
+		results.set(category, existing);
+	});
+
+	return Array.from(results.values());
+}
