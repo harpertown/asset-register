@@ -159,6 +159,15 @@ export default function RegisterEditingView({
   const [pendingDeleteVersion, setPendingDeleteVersion] = useState<Asset | null>(null);
   const [showAcquisitionReassignModal, setShowAcquisitionReassignModal] = useState(false);
   const [debugSortDirection, setDebugSortDirection] = useState<"asc" | "desc">("asc");
+  const [versionSortMode, setVersionSortMode] = useState<"effective" | "generation">("effective");
+
+  const formatCreatedAt = (createdAt?: string) => {
+    if (!createdAt) return "Unknown";
+    const normalized = createdAt.includes("T") ? createdAt : `${createdAt.replace(" ", "T")}Z`;
+    const date = new Date(normalized);
+    if (Number.isNaN(date.getTime())) return createdAt;
+    return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  };
 
   const getFyTagForDate = (dateString?: string) => {
     if (!dateString) return null;
@@ -176,6 +185,81 @@ export default function RegisterEditingView({
     if (Number.isNaN(date.getTime())) return false;
     return date.getMonth() + 1 === 4;
   };
+
+  const parseDate = (dateString?: string) => {
+    if (!dateString) return null;
+    const normalized = dateString.includes("T") ? dateString : `${dateString.replace(" ", "T")}Z`;
+    const date = new Date(normalized);
+    if (Number.isNaN(date.getTime())) return null;
+    return date;
+  };
+
+  const getEffectiveSortDate = (asset: Asset) => {
+    const isAcquisition =
+      asset.exemptionType === "Acquisition" ||
+      (!asset.exemptionType && ((asset.version || 1) === 1 || !asset.parentAssetId));
+    if (isAcquisition) {
+      return parseDate(asset.purchaseDate) || parseDate(asset.effectiveFrom) || parseDate(asset.createdAt);
+    }
+    return parseDate(asset.effectiveFrom) || parseDate(asset.createdAt) || parseDate(asset.purchaseDate);
+  };
+
+  const getGenerationSortDate = (asset: Asset) =>
+    parseDate(asset.createdAt) || parseDate(asset.effectiveFrom) || parseDate(asset.purchaseDate);
+
+  const latestVersionId = useMemo(() => {
+    if (versionHistory.length === 0) return null;
+    return versionHistory.reduce((latest, current) => {
+      if (!latest) return current;
+      if ((current.version || 0) > (latest.version || 0)) return current;
+      if ((current.version || 0) === (latest.version || 0)) {
+        const currentDate = getGenerationSortDate(current);
+        const latestDate = getGenerationSortDate(latest);
+        if (currentDate && latestDate && currentDate > latestDate) return current;
+      }
+      return latest;
+    }, versionHistory[0] as Asset).id;
+  }, [versionHistory]);
+
+  const sortVersions = (mode: "effective" | "generation", input: Asset[]) =>
+    input
+      .map((version, index) => ({ version, index }))
+      .sort((a, b) => {
+        const aDate = mode === "effective" ? getEffectiveSortDate(a.version) : getGenerationSortDate(a.version);
+        const bDate = mode === "effective" ? getEffectiveSortDate(b.version) : getGenerationSortDate(b.version);
+        if (aDate && bDate) {
+          const diff = aDate.getTime() - bDate.getTime();
+          if (diff !== 0) return diff;
+        } else if (aDate && !bDate) {
+          return -1;
+        } else if (!aDate && bDate) {
+          return 1;
+        }
+        if (mode === "generation") {
+          const versionDiff = (a.version.version || 0) - (b.version.version || 0);
+          if (versionDiff !== 0) return versionDiff;
+        }
+        return a.index - b.index;
+      })
+      .map((entry) => entry.version);
+
+  const effectiveVersionHistory = useMemo(
+    () => sortVersions("effective", versionHistory),
+    [versionHistory]
+  );
+
+  const sortedVersionHistory = useMemo(
+    () => sortVersions(versionSortMode, versionHistory),
+    [versionHistory, versionSortMode]
+  );
+
+  const effectivePrevById = useMemo(() => {
+    const map = new Map<string, Asset | null>();
+    effectiveVersionHistory.forEach((version, index) => {
+      map.set(version.id, index > 0 ? effectiveVersionHistory[index - 1] : null);
+    });
+    return map;
+  }, [effectiveVersionHistory]);
   
   const wizardRoom = assetWizard.state.roomId
     ? register.rooms.find((r) => r.id === assetWizard.state.roomId)
@@ -434,13 +518,34 @@ export default function RegisterEditingView({
                   <p className="text-sm text-gray-600">Asset ID: {selectedDebugAsset.assetId || "-"}</p>
                   <p className="text-sm text-gray-500 font-mono">Asset GUID: {selectedDebugAsset.assetGuid || selectedDebugAsset.id}</p>
                 </div>
-                <h3 className="font-medium text-gray-900 mb-2">Version History ({versionHistory.length} version{versionHistory.length !== 1 ? "s" : ""})</h3>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-medium text-gray-900">
+                    Version History ({versionHistory.length} version{versionHistory.length !== 1 ? "s" : ""})
+                  </h3>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-gray-500">Order:</span>
+                    <button
+                      type="button"
+                      onClick={() => setVersionSortMode("effective")}
+                      className={`px-2 py-1 rounded border ${versionSortMode === "effective" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"}`}
+                    >
+                      Effective date
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVersionSortMode("generation")}
+                      className={`px-2 py-1 rounded border ${versionSortMode === "generation" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"}`}
+                    >
+                      Generation order
+                    </button>
+                  </div>
+                </div>
                 {isLoadingVersions ? (
                   <div className="text-gray-500 py-4 text-center">Loading version history...</div>
                 ) : (
                   <div className="overflow-auto flex-1 space-y-3">
-                    {versionHistory.map((version, i) => {
-                      const isLatestVersion = i === versionHistory.length - 1;
+                    {sortedVersionHistory.map((version, i) => {
+                      const isLatestVersion = version.id === latestVersionId;
                       const isAcquisition =
                         version.exemptionType === "Acquisition" ||
                         (!version.exemptionType && (version.version === 1 || !version.parentAssetId));
@@ -457,17 +562,14 @@ export default function RegisterEditingView({
                       return (
                       <div 
                         key={version.id} 
-                        className={`p-4 border rounded-lg ${i === versionHistory.length - 1 ? 'border-blue-300 bg-blue-50' : 'border-gray-200'}`}
+                        className={`p-4 border rounded-lg ${version.id === latestVersionId ? 'border-blue-300 bg-blue-50' : 'border-gray-200'}`}
                       >
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
                             {/* Only show version number if there are multiple versions */}
-                            {versionHistory.length > 1 && (
-                              <span className="font-medium text-gray-900">
-                                Version {version.version || 1}
-                              </span>
-                            )}
-                            {i === versionHistory.length - 1 && <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded">Current</span>}
+                            <span className="font-medium text-gray-900">
+                              {formatCreatedAt(version.createdAt)}
+                            </span>
                             {/* Exemption Type Badge */}
                             {(versionHistory.length === 1 || version.exemptionType) && (
                               <span className={`text-xs px-2 py-0.5 rounded ${
@@ -485,7 +587,7 @@ export default function RegisterEditingView({
                                   ? "bg-amber-100 text-amber-700"
                                   : version.exemptionType === "Marked available for use"
                                   ? "bg-teal-100 text-teal-700"
-                                  : version.exemptionType === "Change depn method or value"
+                                  : version.exemptionType === "Change depn method or value" || version.exemptionType === "Change depn method"
                                   ? "bg-cyan-100 text-cyan-700"
                                   : version.exemptionType === "Reclassify asset category"
                                   ? "bg-indigo-100 text-indigo-700"
@@ -520,7 +622,7 @@ export default function RegisterEditingView({
                           </div>
                         </div>
                         {(() => {
-                          const prev = i > 0 ? versionHistory[i - 1] : null;
+                          const prev = effectivePrevById.get(version.id) ?? null;
                           const changed = (field: keyof Asset) => {
                             if (!prev) return false;
                             const prevVal = prev[field];
@@ -530,6 +632,35 @@ export default function RegisterEditingView({
                             return normalize(prevVal) !== normalize(currVal);
                           };
                           const highlightClass = "bg-green-100 px-1 rounded";
+                          const formatText = (value: any, placeholder = "-") =>
+                            value === undefined || value === null || value === "" ? placeholder : String(value);
+                          const formatPriceValue = (value: any) => {
+                            const num = typeof value === "number" ? value : parseFloat(String(value ?? "0"));
+                            const safe = Number.isFinite(num) ? num : 0;
+                            return `$${safe.toLocaleString()}`;
+                          };
+                          const formatRateValue = (value: any) =>
+                            value === undefined || value === null || value === "" ? "-" : `${value}%`;
+                          const renderField = (field: keyof Asset, formatter: (value: any) => string) => {
+                            const prevVal = prev ? prev[field] : undefined;
+                            const currVal = version[field];
+                            const prevText = formatter(prevVal);
+                            const currText = formatter(currVal);
+                            if (changed(field) && prev) {
+                              return (
+                                <span className="ml-1 text-gray-900">
+                                  <span className="text-gray-400 line-through">{prevText}</span>
+                                  <span className="mx-1 text-gray-400">-&gt;</span>
+                                  <span className={highlightClass}>{currText}</span>
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className={`ml-1 text-gray-900 ${changed(field) ? highlightClass : ""}`}>
+                                {currText}
+                              </span>
+                            );
+                          };
                           
                           return (
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
@@ -537,41 +668,47 @@ export default function RegisterEditingView({
                                 <span className="text-gray-500">Version GUID:</span>
                                 <span className="ml-1 font-mono text-xs text-gray-700">{version.versionId || version.id}</span>
                               </div>
+                              {version.exemptionNote && (
+                                <div className="col-span-2 md:col-span-3">
+                                  <span className="text-gray-500">Note:</span>
+                                  <span className="ml-1 text-gray-900">{version.exemptionNote}</span>
+                                </div>
+                              )}
                               <div>
                                 <span className="text-gray-500">Name:</span>
-                                <span className={`ml-1 text-gray-900 ${changed("name") ? highlightClass : ""}`}>{version.name}</span>
+                                {renderField("name", (value) => formatText(value))}
                               </div>
                               <div>
                                 <span className="text-gray-500">Type:</span>
-                                <span className={`ml-1 text-gray-900 ${changed("itemType") ? highlightClass : ""}`}>{version.itemType || "-"}</span>
+                                {renderField("itemType", (value) => formatText(value))}
                               </div>
                               <div>
                                 <span className="text-gray-500">Price:</span>
-                                <span className={`ml-1 text-gray-900 ${changed("purchasePrice") ? highlightClass : ""}`}>${version.purchasePrice?.toLocaleString() || "0"}</span>
+                                {renderField("purchasePrice", formatPriceValue)}
                               </div>
                               <div>
                                 <span className="text-gray-500">Purchase Date:</span>
-                                <span className={`ml-1 text-gray-900 ${changed("purchaseDate") ? highlightClass : ""}`}>{version.purchaseDate || "-"}</span>
+                                {renderField("purchaseDate", (value) => formatText(value))}
                               </div>
                               <div>
                                 <span className="text-gray-500">Serial:</span>
-                                <span className={`ml-1 text-gray-900 ${changed("serialNumber") ? highlightClass : ""}`}>{version.serialNumber || "-"}</span>
+                                {renderField("serialNumber", (value) => formatText(value))}
                               </div>
                               <div>
                                 <span className="text-gray-500">Acc Method:</span>
-                                <span className={`ml-1 text-gray-900 ${changed("depnMethodAcc") ? highlightClass : ""}`}>{version.depnMethodAcc || "-"}</span>
+                                {renderField("depnMethodAcc", (value) => formatText(value))}
                               </div>
                               <div>
                                 <span className="text-gray-500">Acc Rate:</span>
-                                <span className={`ml-1 text-gray-900 ${changed("depnRateAcc") ? highlightClass : ""}`}>{version.depnRateAcc ? `${version.depnRateAcc}%` : "-"}</span>
+                                {renderField("depnRateAcc", formatRateValue)}
                               </div>
                               <div>
                                 <span className="text-gray-500">Tax Method:</span>
-                                <span className={`ml-1 text-gray-900 ${changed("depnMethodTax") ? highlightClass : ""}`}>{version.depnMethodTax || "-"}</span>
+                                {renderField("depnMethodTax", (value) => formatText(value))}
                               </div>
                               <div>
                                 <span className="text-gray-500">Tax Rate:</span>
-                                <span className={`ml-1 text-gray-900 ${changed("depnRateTax") ? highlightClass : ""}`}>{version.depnRateTax ? `${version.depnRateTax}%` : "-"}</span>
+                                {renderField("depnRateTax", formatRateValue)}
                               </div>
                               <div>
                                 <span className="text-gray-500">Status:</span>
@@ -622,7 +759,7 @@ export default function RegisterEditingView({
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="font-medium text-gray-900">Version {version.version || 1}</span>
+                        <span className="font-medium text-gray-900">{formatCreatedAt(version.createdAt)}</span>
                         {version.exemptionType && version.exemptionType !== "Acquisition" && (
                           <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
                             {version.exemptionType}

@@ -150,6 +150,7 @@ export const apiService = {
     depnMethodTax?: string;
     depnRateTax?: string;
     exemptionType?: string;
+    exemptionNote?: string;
   }): Promise<{ success: boolean }> {
     const res = await fetch("/api/registers", {
       method: "POST",
@@ -174,6 +175,7 @@ export const apiService = {
     depnRateTax?: string;
     exemptionType?: string;
     effectiveFrom?: string;
+    exemptionNote?: string;
   }): Promise<{ id: string; version: number; effectiveFrom: string; success: boolean }> {
     const res = await fetch("/api/registers", {
       method: "POST",

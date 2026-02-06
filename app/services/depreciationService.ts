@@ -8,6 +8,8 @@ export interface DepreciableAsset {
 	name: string;
 	purchasePrice: number;
 	purchaseDate?: string;
+	parentPurchasePrice?: number;
+	parentAssetId?: string | null;
 	depnMethodAcc?: string;
 	depnRateAcc?: string;
 	depnMethodTax?: string;
@@ -60,6 +62,58 @@ export interface CategorySummary {
 	depreciation: number;
 	closingBookValue: number;
 	calcType: "accounting" | "tax";
+}
+
+const revaluationTypes = new Set(["Revaluation", "Impairment", "Improvement"]);
+
+function getFyTagForDate(dateString?: string): string | null {
+	if (!dateString) return null;
+	const date = new Date(dateString);
+	if (Number.isNaN(date.getTime())) return null;
+	const month = date.getMonth() + 1;
+	const year = date.getFullYear();
+	const endYear = month >= 4 ? year + 1 : year;
+	return `fy${String(endYear).slice(-2)}`;
+}
+
+function isFirstMonthOfFy(dateString?: string): boolean {
+	if (!dateString) return false;
+	const date = new Date(dateString);
+	if (Number.isNaN(date.getTime())) return false;
+	return date.getMonth() + 1 === 4;
+}
+
+function parseIsoDate(dateString?: string): Date | null {
+	if (!dateString) return null;
+	const date = new Date(dateString);
+	if (Number.isNaN(date.getTime())) return null;
+	return date;
+}
+
+function getEventDate(version: DepreciableAsset & { parentAssetId?: string | null; exemptionType?: string }): Date | null {
+	const isAcquisition =
+		version.exemptionType === "Acquisition" ||
+		(!version.exemptionType && (version as any).version === 1) ||
+		!(version as any).parentAssetId;
+	return parseIsoDate(isAcquisition ? version.purchaseDate : version.effectiveFrom);
+}
+
+function getFyBounds(financialYear: string): { start: Date; end: Date } {
+	const endYear = Number(financialYear);
+	const startYear = endYear - 1;
+	return {
+		start: new Date(startYear, 3, 1),
+		end: new Date(endYear, 2, 31),
+	};
+}
+
+function getFyMonthIndex(date: Date, financialYear: string): number | null {
+	const { start, end } = getFyBounds(financialYear);
+	if (date < start || date > end) return null;
+	const month = date.getMonth(); // 0-11
+	// FY month index: Apr(0) => 1, ... Mar(11) => 12
+	const fyIndex = ((month + 9) % 12) + 1;
+	return fyIndex;
 }
 
 /**
@@ -268,6 +322,17 @@ export function calculateDepreciationSchedule(
 		asset.exemptionType === "Disposal" && asset.effectiveFrom
 			? calculateFinancialPeriod(asset.effectiveFrom).month
 			: null;
+	const revalnMonth =
+		asset.exemptionType &&
+		["Revaluation", "Impairment", "Improvement"].includes(asset.exemptionType) &&
+		asset.effectiveFrom
+			? calculateFinancialPeriod(asset.effectiveFrom).month
+			: null;
+	const basePurchasePrice =
+		revalnMonth !== null && asset.parentPurchasePrice !== undefined && asset.parentPurchasePrice !== null
+			? asset.parentPurchasePrice
+			: purchasePrice;
+	const revalnAmount = revalnMonth !== null ? purchasePrice - basePurchasePrice : 0;
 
 	// Calculate month-by-month depreciation for the financial year
 	const months: MonthlyDepreciation[] = [];
@@ -275,20 +340,25 @@ export function calculateDepreciationSchedule(
 	let totalDepn = 0;
 	let totalAdditions = 0;
 	let totalDisposals = 0;
+	let totalRevals = 0;
 
 	for (let month = 1; month <= 12; month++) {
 		let acquisitions = 0;
 		let disposals = 0;
+		let revalns = 0;
 
 		// For the acquisition month, opening value is $0 and acquisitions is the purchase price
 		if (month === acquisitionMonth) {
 			openingValue = 0;
-			acquisitions = purchasePrice;
+			acquisitions = basePurchasePrice;
 			totalAdditions += acquisitions;
+		}
+		if (revalnMonth !== null && month === revalnMonth) {
+			revalns = revalnAmount;
 		}
 
 		// Calculate depreciation on the book value (opening + acquisitions)
-		const bookValue = openingValue + acquisitions;
+		const bookValue = openingValue + acquisitions + revalns;
 		let monthDepn = 0;
 
 		if (disposalMonth !== null && month === disposalMonth) {
@@ -301,11 +371,12 @@ export function calculateDepreciationSchedule(
 		} else if (isLowValue) {
 			// Low-value write-off: full depreciation in acquisition month
 			if (month === acquisitionMonth) {
-				monthDepn = purchasePrice;
+				monthDepn = basePurchasePrice;
 			}
 		} else if (isStraightLine) {
 			// Straight-line: same amount each month based on original cost
-			monthDepn = calculateMonthlyDepreciationSL(purchasePrice, bookValue, rate);
+			const slBasePrice = revalnMonth !== null && month < revalnMonth ? basePurchasePrice : purchasePrice;
+			monthDepn = calculateMonthlyDepreciationSL(slBasePrice, bookValue, rate);
 		} else {
 			// Diminishing value: based on current book value
 			monthDepn = calculateMonthlyDepreciationDV(bookValue, rate);
@@ -316,7 +387,7 @@ export function calculateDepreciationSchedule(
 		months.push({
 			month,
 			openingValue,
-			revalns: 0,
+			revalns,
 			acquisitions,
 			disposals,
 			depn: monthDepn,
@@ -325,6 +396,7 @@ export function calculateDepreciationSchedule(
 
 		totalDepn += monthDepn;
 		totalDisposals += disposals;
+		totalRevals += revalns;
 		openingValue = closingValue;
 	}
 
@@ -334,11 +406,253 @@ export function calculateDepreciationSchedule(
 		purchasePrice,
 		months,
 		open: 0,
-		totalRevals: 0,
+		totalRevals,
 		totalAdditions,
 		totalDisposals,
 		totalDepn,
 		close: openingValue,
+		calcType: type === "working" ? "accounting" : "tax",
+	};
+}
+
+export function calculateDepreciationScheduleFromHistory(
+	versions: (DepreciableAsset & { parentAssetId?: string | null; version?: number; exemptionType?: string })[],
+	type: "working" | "register",
+	financialYear: string
+): DepreciationSchedule {
+	const sorted = [...versions].sort((a, b) => (a.version || 0) - (b.version || 0));
+	const latestIndex = sorted.length - 1;
+
+	const currentFyTag = `fy${String(financialYear).slice(-2)}`;
+	const taggedIndex = sorted
+		.map((version, index) => {
+			const isLatestVersion = index === latestIndex;
+			const isAcquisition =
+				version.exemptionType === "Acquisition" ||
+				(!version.exemptionType && ((version as any).version === 1 || !version.parentAssetId));
+			if (isAcquisition) {
+				return getFyTagForDate(version.purchaseDate || version.effectiveFrom || undefined) === currentFyTag
+					? index
+					: -1;
+			}
+			if (isLatestVersion && version.exemptionType && isFirstMonthOfFy(version.effectiveFrom)) {
+				return getFyTagForDate(version.effectiveFrom || undefined) === currentFyTag ? index : -1;
+			}
+			return -1;
+		})
+		.filter((i) => i !== -1)
+		.pop();
+
+	const { start: fyStart, end: fyEnd } = getFyBounds(financialYear);
+
+	const effectiveSorted = sorted
+		.map((version, index) => {
+			const eventDate = getEventDate(version);
+			if (!eventDate) return null;
+			return { version, eventDate, index };
+		})
+		.filter((event): event is { version: DepreciableAsset & { parentAssetId?: string | null; version?: number; exemptionType?: string }; eventDate: Date; index: number } => Boolean(event))
+		.sort((a, b) => {
+			const diff = a.eventDate.getTime() - b.eventDate.getTime();
+			if (diff !== 0) return diff;
+			return (a.version.version || 0) - (b.version.version || 0);
+		});
+
+	let depreciationPaused = false;
+	for (const event of effectiveSorted) {
+		if (event.eventDate >= fyStart) break;
+		if (event.version.exemptionType === "Marked unavailable for use") {
+			depreciationPaused = true;
+		} else if (event.version.exemptionType === "Marked available for use") {
+			depreciationPaused = false;
+		}
+	}
+
+	let checkpointIndex = taggedIndex ?? -1;
+	if (checkpointIndex === -1) {
+		// Fallback: latest version effective before FY start
+		let latestBefore = -1;
+		let latestBeforeDate: Date | null = null;
+		sorted.forEach((version, index) => {
+			const eventDate = getEventDate(version);
+			if (!eventDate || eventDate > fyStart) return;
+			if (!latestBeforeDate || eventDate > latestBeforeDate) {
+				latestBeforeDate = eventDate;
+				latestBefore = index;
+			}
+		});
+		checkpointIndex = latestBefore !== -1 ? latestBefore : 0;
+	}
+
+	const checkpoint = sorted[checkpointIndex];
+	const checkpointDate = getEventDate(checkpoint);
+	const checkpointInFy = checkpointDate ? checkpointDate >= fyStart && checkpointDate <= fyEnd : false;
+	const checkpointIsAcquisition =
+		checkpoint.exemptionType === "Acquisition" ||
+		(!checkpoint.exemptionType && ((checkpoint as any).version === 1 || !checkpoint.parentAssetId));
+	const checkpointIsAprilExemption =
+		!checkpointIsAcquisition &&
+		Boolean(checkpoint.exemptionType) &&
+		checkpointIndex === latestIndex &&
+		isFirstMonthOfFy(checkpoint.effectiveFrom) &&
+		getFyTagForDate(checkpoint.effectiveFrom || undefined) === currentFyTag;
+	const useCheckpointAsOpening = !checkpointInFy || checkpointIsAprilExemption;
+
+	if (useCheckpointAsOpening) {
+		if (checkpoint.exemptionType === "Marked unavailable for use") {
+			depreciationPaused = true;
+		} else if (checkpoint.exemptionType === "Marked available for use") {
+			depreciationPaused = false;
+		}
+	}
+
+	const baseValue = checkpoint?.purchasePrice || 0;
+	const baseMethod = type === "working" ? checkpoint.depnMethodAcc : checkpoint.depnMethodTax;
+	const baseRate = type === "working" ? checkpoint.depnRateAcc : checkpoint.depnRateTax;
+	let currentMethod = baseMethod || "SL";
+	let currentRate = baseRate || "";
+
+	let currentValue = useCheckpointAsOpening ? baseValue : 0;
+	let slBaseCost = useCheckpointAsOpening ? baseValue : 0;
+
+	const events = sorted
+		.map((version, index) => {
+			const eventDate = getEventDate(version);
+			if (!eventDate) return null;
+			return {
+				index,
+				version,
+				eventDate,
+			};
+		})
+		.filter((event): event is { index: number; version: DepreciableAsset & { parentAssetId?: string | null; version?: number; exemptionType?: string }; eventDate: Date } => Boolean(event))
+		.filter((event) => event.eventDate >= fyStart && event.eventDate <= fyEnd)
+		.filter((event) => (useCheckpointAsOpening ? event.index !== checkpointIndex : true))
+		.sort((a, b) => {
+			const diff = a.eventDate.getTime() - b.eventDate.getTime();
+			if (diff !== 0) return diff;
+			return (a.version.version || 0) - (b.version.version || 0);
+		});
+
+	if (!useCheckpointAsOpening && checkpointDate && !events.some((event) => event.index === checkpointIndex)) {
+		events.unshift({ index: checkpointIndex, version: checkpoint, eventDate: checkpointDate });
+	}
+
+	const purchasePrice = baseValue;
+	const months: MonthlyDepreciation[] = [];
+	let openingValue = currentValue;
+	let totalDepn = 0;
+	let totalAdditions = 0;
+	let totalDisposals = 0;
+	let totalRevals = 0;
+
+	for (let month = 1; month <= 12; month++) {
+		let acquisitions = 0;
+		let disposals = 0;
+		let revalns = 0;
+		let disposalThisMonth = false;
+
+		const monthEvents = events.filter((event) => getFyMonthIndex(event.eventDate, financialYear) === month);
+		for (const event of monthEvents) {
+			const version = event.version;
+			const isAcquisition =
+				version.exemptionType === "Acquisition" ||
+				(!version.exemptionType && ((version as any).version === 1 || !version.parentAssetId));
+			if (isAcquisition) {
+				const value = version.purchasePrice || 0;
+				acquisitions += value;
+				currentValue += value;
+				slBaseCost += value;
+				continue;
+			}
+			if (version.exemptionType === "Marked unavailable for use") {
+				depreciationPaused = true;
+				continue;
+			}
+			if (version.exemptionType === "Marked available for use") {
+				depreciationPaused = false;
+				continue;
+			}
+			if (version.exemptionType === "Change depn method") {
+				if (type === "working") {
+					if (version.depnMethodAcc) currentMethod = version.depnMethodAcc;
+					if (version.depnRateAcc !== undefined) currentRate = version.depnRateAcc;
+				} else {
+					if (version.depnMethodTax) currentMethod = version.depnMethodTax;
+					if (version.depnRateTax !== undefined) currentRate = version.depnRateTax;
+				}
+				continue;
+			}
+			if (version.exemptionType === "Disposal") {
+				disposals += -currentValue;
+				currentValue = 0;
+				disposalThisMonth = true;
+				continue;
+			}
+			if (version.exemptionType && revaluationTypes.has(version.exemptionType)) {
+				const newValue = version.purchasePrice || 0;
+				const delta = newValue - currentValue;
+				revalns += delta;
+				currentValue = newValue;
+				slBaseCost = newValue;
+			}
+		}
+
+		const bookValue = openingValue + acquisitions + revalns;
+		const rate = currentRate ? parseRate(String(currentRate)) : 0;
+		const method = currentMethod ? currentMethod.toLowerCase() : "sl";
+		const isNonDepreciable = method === "nd" || method.includes("non-dep");
+		const isLowValue = method === "lv" || method.includes("low-value");
+		const isStraightLine = method === "sl" || method.includes("straight");
+		let monthDepn = 0;
+		if (disposalThisMonth || depreciationPaused) {
+			monthDepn = 0;
+		} else if (isNonDepreciable) {
+			monthDepn = 0;
+		} else if (isLowValue) {
+			if (acquisitions > 0) {
+				monthDepn = acquisitions;
+			}
+		} else if (isStraightLine) {
+			monthDepn = calculateMonthlyDepreciationSL(slBaseCost, bookValue, rate);
+		} else {
+			monthDepn = calculateMonthlyDepreciationDV(bookValue, rate);
+		}
+
+		const closingValue = Math.max(0, bookValue + disposals - monthDepn);
+
+		months.push({
+			month,
+			openingValue,
+			revalns,
+			acquisitions,
+			disposals,
+			depn: monthDepn,
+			closingValue,
+		});
+
+		totalDepn += monthDepn;
+		totalDisposals += disposals;
+		totalAdditions += acquisitions;
+		totalRevals += revalns;
+		openingValue = closingValue;
+		currentValue = closingValue;
+	}
+
+	const name = sorted[latestIndex]?.name || "";
+	const assetId = sorted[latestIndex]?.assetId || "";
+
+	return {
+		assetId,
+		name,
+		purchasePrice,
+		months,
+		open: months[0]?.openingValue || 0,
+		totalRevals,
+		totalAdditions,
+		totalDisposals,
+		totalDepn,
+		close: months[months.length - 1]?.closingValue || 0,
 		calcType: type === "working" ? "accounting" : "tax",
 	};
 }

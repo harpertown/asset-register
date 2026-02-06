@@ -1,5 +1,6 @@
 import type { Room, WizardStep, Asset } from "~/types";
 import { formatCurrency, formatPriceInput, parsePriceInput } from "~/utils";
+import { ASSET_CATEGORIES } from "~/constants";
 import ModalWrapper from "./ModalWrapper";
 import { useClickOutside } from "~/hooks";
 
@@ -34,18 +35,6 @@ interface AssetWizardModalProps {
   onAddAsset: (e: React.FormEvent) => void;
   onEditAsset: (asset: Asset) => void;
 }
-
-const ASSET_CATEGORIES = [
-  "Computers and laptops",
-  "Computer hardware, including printers",
-  "Computer software programs",
-  "Photocopiers",
-  "Office furniture",
-  "Tools of the trade",
-  "Plant or machinery used for production",
-  "Art",
-  "Motor vehicles",
-];
 
 export default function AssetWizardModal({
   isOpen,

@@ -30,7 +30,12 @@ export async function loader({ context }: Route.LoaderArgs) {
 				groups.results.map(async (group: any) => {
 					// Only get the latest version of each asset (those not superseded by newer versions)
 					const assets = await db
-						.prepare(`SELECT * FROM assets WHERE asset_group_id = ? AND id NOT IN (SELECT parent_asset_id FROM assets WHERE parent_asset_id IS NOT NULL) ORDER BY created_at ASC`)
+						.prepare(`SELECT a.*, p.purchase_price AS parent_purchase_price
+							FROM assets a
+							LEFT JOIN assets p ON a.parent_asset_id = p.id
+							WHERE a.asset_group_id = ?
+								AND a.id NOT IN (SELECT parent_asset_id FROM assets WHERE parent_asset_id IS NOT NULL)
+							ORDER BY a.created_at ASC`)
 						.bind(group.id)
 						.all();
 
@@ -85,8 +90,11 @@ export async function loader({ context }: Route.LoaderArgs) {
 							versionId: asset.version_id || asset.id,
 							assetGuid: asset.asset_guid || asset.id,
 							parentAssetId: asset.parent_asset_id || null,
+							parentPurchasePrice: asset.parent_purchase_price ?? null,
+							createdAt: asset.created_at || "",
 							effectiveFrom: asset.effective_from || "",
 							exemptionType: asset.exemption_type || (asset.version === 1 || !asset.parent_asset_id ? "Acquisition" : ""),
+							exemptionNote: asset.exemption_note || "",
 						})),
 					};
 				})
@@ -277,6 +285,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			if (payload.depnMethodTax !== undefined) { updates.push("depn_method_tax = ?"); values.push(payload.depnMethodTax || null); }
 			if (payload.depnRateTax !== undefined) { updates.push("depn_rate_tax = ?"); values.push(payload.depnRateTax || null); }
 			if (payload.exemptionType !== undefined) { updates.push("exemption_type = ?"); values.push(payload.exemptionType || null); }
+			if (payload.exemptionNote !== undefined) { updates.push("exemption_note = ?"); values.push(payload.exemptionNote || null); }
 
 			if (updates.length === 0) {
 				return Response.json({ success: true }); // Nothing to update
@@ -320,8 +329,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 			// Create new version with original data + any overrides, keeping same asset_guid
 			await db
 				.prepare(
-					`INSERT INTO assets (id, asset_group_id, asset_id, item_type, name, serial_number, purchase_price, purchase_date, photo, incomplete, depn_method_acc, depn_rate_acc, depn_method_tax, depn_rate_tax, version, parent_asset_id, effective_from, version_id, asset_guid, exemption_type)
-					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+					`INSERT INTO assets (id, asset_group_id, asset_id, item_type, name, serial_number, purchase_price, purchase_date, photo, incomplete, depn_method_acc, depn_rate_acc, depn_method_tax, depn_rate_tax, version, parent_asset_id, effective_from, version_id, asset_guid, exemption_type, exemption_note)
+					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 				)
 				.bind(
 					newId,
@@ -343,7 +352,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 					effectiveFrom,
 					newVersionId,
 					assetGuid,
-					payload.exemptionType || ""
+					payload.exemptionType || "",
+					payload.exemptionNote || null
 				)
 				.run();
 
@@ -421,6 +431,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 					parentAssetId: (asset as any).parent_asset_id || null,
 					effectiveFrom: (asset as any).effective_from || "",
 					exemptionType: (asset as any).exemption_type || ((asset as any).version === 1 || !(asset as any).parent_asset_id ? "Acquisition" : ""),
+					exemptionNote: (asset as any).exemption_note || "",
+					createdAt: (asset as any).created_at || "",
 				});
 			}
 

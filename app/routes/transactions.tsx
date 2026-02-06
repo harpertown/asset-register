@@ -4,10 +4,11 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router";
 import React from "react";
 import { apiService } from "~/services/api";
-import { calculateDepreciationSchedule, calculateCategorySummary } from "~/services/depreciationService";
+import { calculateDepreciationSchedule, calculateDepreciationScheduleFromHistory, calculateCategorySummary } from "~/services/depreciationService";
 import type { Register, Transaction } from "~/types";
 import type { DepreciationSchedule, CategorySummary } from "~/services/depreciationService";
 import { formatCurrency, currencyCellStyle, calculateFinancialPeriod, formatDate, formatPriceInput, parsePriceInput } from "~/utils";
+import { ASSET_CATEGORIES } from "~/constants";
 
 export function meta() {
 	return [
@@ -89,10 +90,17 @@ export default function Transactions() {
 	const [exemptionSearchQuery, setExemptionSearchQuery] = useState("");
 	const [selectedExemptionAsset, setSelectedExemptionAsset] = useState<Transaction | null>(null);
 	const [selectedExemptionType, setSelectedExemptionType] = useState<string | null>(null);
-	const [exemptionEffectiveMonth, setExemptionEffectiveMonth] = useState(() => {
+	const [exemptionEffectiveDate, setExemptionEffectiveDate] = useState(() => {
 		const now = new Date();
-		return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+		return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 	});
+	const [exemptionNote, setExemptionNote] = useState("");
+	const [exemptionNewValue, setExemptionNewValue] = useState("");
+	const [exemptionDepnMethodAcc, setExemptionDepnMethodAcc] = useState("");
+	const [exemptionDepnRateAcc, setExemptionDepnRateAcc] = useState("");
+	const [exemptionDepnMethodTax, setExemptionDepnMethodTax] = useState("");
+	const [exemptionDepnRateTax, setExemptionDepnRateTax] = useState("");
+	const [exemptionCategory, setExemptionCategory] = useState("");
 	const [showExemptionConfirm, setShowExemptionConfirm] = useState(false);
 	const [isSavingExemption, setIsSavingExemption] = useState(false);
 
@@ -291,6 +299,7 @@ export default function Transactions() {
 						assetId: asset.assetId || "",
 						assetGuid: asset.assetGuid || asset.id,
 						versionId: asset.versionId || asset.id,
+						itemType: asset.itemType,
 						assetCategory: cat,
 						assetDescription: desc,
 						recordDate: formatDate(asset.purchaseDate),
@@ -379,16 +388,32 @@ export default function Transactions() {
 		}
 	};
 
-	const handleFYWorking = () => {
+	const handleFYWorking = async () => {
 		if (!register) return;
 		setDepreciationType("working");
-		// Calculate both accounting and tax depreciation for FY Working
 		const allAssets = register.rooms.flatMap((room) => room.assets);
-		const accResults = allAssets.map((asset) => calculateDepreciationSchedule(asset, "working"));
-		const taxResults = allAssets.map((asset) => calculateDepreciationSchedule(asset, "register"));
-		// Combine both results
-		setDepreciationResults([...accResults, ...taxResults]);
-		setShowDepreciationModal(true);
+		try {
+			const histories = await Promise.all(
+				allAssets.map(async (asset) => {
+					try {
+						const result = await apiService.getAssetVersions(asset.id);
+						return result.versions.length > 0 ? result.versions : [asset];
+					} catch {
+						return [asset];
+					}
+				})
+			);
+			const accResults = histories.map((versions) =>
+				calculateDepreciationScheduleFromHistory(versions, "working", financialYear)
+			);
+			const taxResults = histories.map((versions) =>
+				calculateDepreciationScheduleFromHistory(versions, "register", financialYear)
+			);
+			setDepreciationResults([...accResults, ...taxResults]);
+			setShowDepreciationModal(true);
+		} catch (err) {
+			console.error("Failed to calculate FY Working:", err);
+		}
 	};
 
 	const handleFYRegister = () => {
@@ -412,6 +437,15 @@ export default function Transactions() {
 		setExemptionSearchQuery("");
 		setSelectedExemptionAsset(null);
 		setSelectedExemptionType(null);
+		const now = new Date();
+		setExemptionEffectiveDate(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`);
+		setExemptionNote("");
+		setExemptionNewValue("");
+		setExemptionDepnMethodAcc("");
+		setExemptionDepnRateAcc("");
+		setExemptionDepnMethodTax("");
+		setExemptionDepnRateTax("");
+		setExemptionCategory("");
 		setShowExemptionConfirm(false);
 	};
 
@@ -420,7 +454,28 @@ export default function Transactions() {
 		setExemptionSearchQuery("");
 		setSelectedExemptionAsset(null);
 		setSelectedExemptionType(null);
+		const now = new Date();
+		setExemptionEffectiveDate(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`);
+		setExemptionNote("");
+		setExemptionNewValue("");
+		setExemptionDepnMethodAcc("");
+		setExemptionDepnRateAcc("");
+		setExemptionDepnMethodTax("");
+		setExemptionDepnRateTax("");
+		setExemptionCategory("");
 		setShowExemptionConfirm(false);
+	};
+
+	const valueChangeTypeIds = ["Revaluation", "Impairment", "Improvement"] as const;
+	const methodChangeTypeId = "Change depn method";
+	const categoryChangeTypeId = "Reclassify asset category";
+	const isValueChangeTypeId = (type?: string | null) => Boolean(type && valueChangeTypeIds.includes(type as any));
+
+	const normalizeValueInput = (value: string) => {
+		const cleaned = value.replace(/[^0-9.]/g, "");
+		const [whole, ...rest] = cleaned.split(".");
+		if (rest.length === 0) return whole;
+		return `${whole}.${rest.join("")}`;
 	};
 
 	const selectExemptionAsset = (tx: Transaction) => {
@@ -430,6 +485,29 @@ export default function Transactions() {
 
 	const selectExemptionType = (type: string) => {
 		setSelectedExemptionType(type);
+		setExemptionNote("");
+		if (isValueChangeTypeId(type)) {
+			const currentValue = selectedExemptionAsset?.purchasePrice;
+			setExemptionNewValue(currentValue !== undefined && currentValue !== null ? String(currentValue) : "");
+		} else {
+			setExemptionNewValue("");
+		}
+		if (type === methodChangeTypeId) {
+			setExemptionDepnMethodAcc(selectedExemptionAsset?.depnMethodAcc || "");
+			setExemptionDepnRateAcc(selectedExemptionAsset?.depnRateAcc || "");
+			setExemptionDepnMethodTax(selectedExemptionAsset?.depnMethodTax || "");
+			setExemptionDepnRateTax(selectedExemptionAsset?.depnRateTax || "");
+		} else {
+			setExemptionDepnMethodAcc("");
+			setExemptionDepnRateAcc("");
+			setExemptionDepnMethodTax("");
+			setExemptionDepnRateTax("");
+		}
+		if (type === categoryChangeTypeId) {
+			setExemptionCategory(selectedExemptionAsset?.itemType || "");
+		} else {
+			setExemptionCategory("");
+		}
 		setShowExemptionConfirm(true);
 	};
 
@@ -445,27 +523,78 @@ export default function Transactions() {
 
 	const exemptionTypes = [
 		{ id: "Disposal", label: "Disposal", description: "Asset has been sold or scrapped" },
-		{ id: "Revaluation", label: "Revaluation", description: "Asset value has been reassessed" },
-		{ id: "Impairment", label: "Impairment", description: "Asset value has decreased" },
-		{ id: "Improvement", label: "Improvement", description: "Asset has been upgraded or enhanced" },
+		{ id: "Revaluation", label: "Revaluation", description: "Change in value with reason" },
+		{ id: "Impairment", label: "Impairment", description: "Reduction in value with reason" },
+		{ id: "Improvement", label: "Improvement", description: "Increase in value with reason" },
 		{ id: "Marked unavailable for use", label: "Marked unavailable for use", description: "Asset is temporarily unavailable" },
 		{ id: "Marked available for use", label: "Marked available for use", description: "Asset is available for use again" },
-		{ id: "Change depn method or value", label: "Change depn method or value", description: "Recalculation, previous calculation remains" },
-		{ id: "Reclassify asset category", label: "Reclassify asset category", description: "Recalculation, previous calculation remains" },
+		{ id: "Change depn method", label: "Change depn method", description: "Depreciation method change" },
+		{ id: "Reclassify asset category", label: "Reclassify asset category", description: "Asset category reclassification" },
 	];
+
+	const isValueChangeType = isValueChangeTypeId(selectedExemptionType);
+	const isMethodChangeType = selectedExemptionType === methodChangeTypeId;
+	const isCategoryChangeType = selectedExemptionType === categoryChangeTypeId;
+	const categoryOptions = useMemo(() => {
+		const options = [...ASSET_CATEGORIES];
+		if (exemptionCategory && !options.includes(exemptionCategory)) {
+			options.unshift(exemptionCategory);
+		}
+		return options;
+	}, [exemptionCategory]);
+	const currentAssetValue = selectedExemptionAsset?.purchasePrice ?? 0;
+	const parsedNewValue = isValueChangeType ? parseFloat(exemptionNewValue) : 0;
+	const hasValidNewValue = !isValueChangeType || !Number.isNaN(parsedNewValue);
+	const meetsValueRule = !isValueChangeType
+		? true
+		: selectedExemptionType === "Revaluation"
+		? parsedNewValue !== currentAssetValue
+		: selectedExemptionType === "Impairment"
+		? parsedNewValue < currentAssetValue
+		: selectedExemptionType === "Improvement"
+		? parsedNewValue > currentAssetValue
+		: true;
+	const hasValidNote = !isValueChangeType || exemptionNote.trim().length > 0;
+	const hasMethodValues =
+		!isMethodChangeType ||
+		Boolean(exemptionDepnMethodAcc || exemptionDepnMethodTax || exemptionDepnRateAcc || exemptionDepnRateTax);
+	const hasCategoryValue = !isCategoryChangeType || exemptionCategory.trim().length > 0;
+	const hasEffectiveDate = Boolean(exemptionEffectiveDate);
+	const canConfirmExemption =
+		hasEffectiveDate &&
+		hasValidNewValue &&
+		meetsValueRule &&
+		hasValidNote &&
+		hasMethodValues &&
+		hasCategoryValue &&
+		!isSavingExemption;
 
 	const handleConfirmExemption = async () => {
 		if (!selectedExemptionAsset || !selectedExemptionType) return;
+		if (!canConfirmExemption) return;
 		
 		setIsSavingExemption(true);
 		try {
-			// Convert month selection to first day of month (YYYY-MM-01)
-			const effectiveFrom = `${exemptionEffectiveMonth}-01`;
-			
-			await apiService.createAssetVersion(selectedExemptionAsset.id, {
+			const updates: any = {
 				exemptionType: selectedExemptionType,
-				effectiveFrom,
-			});
+				effectiveFrom: exemptionEffectiveDate,
+			};
+
+			if (isValueChangeType) {
+				updates.purchasePrice = parsedNewValue;
+				updates.exemptionNote = exemptionNote.trim();
+			}
+			if (isMethodChangeType) {
+				if (exemptionDepnMethodAcc !== "") updates.depnMethodAcc = exemptionDepnMethodAcc;
+				if (exemptionDepnRateAcc !== "") updates.depnRateAcc = exemptionDepnRateAcc;
+				if (exemptionDepnMethodTax !== "") updates.depnMethodTax = exemptionDepnMethodTax;
+				if (exemptionDepnRateTax !== "") updates.depnRateTax = exemptionDepnRateTax;
+			}
+			if (isCategoryChangeType) {
+				updates.itemType = exemptionCategory.trim();
+			}
+			
+			await apiService.createAssetVersion(selectedExemptionAsset.id, updates);
 			
 			// Reload to reflect changes
 			await loadData();
@@ -961,18 +1090,155 @@ export default function Transactions() {
 
 									<div className="mb-4">
 										<label className="block text-sm font-medium text-gray-700 mb-1">
-											Effective Month
+											Effective Date
 										</label>
 										<input
-											type="month"
-											value={exemptionEffectiveMonth}
-											onChange={(e) => setExemptionEffectiveMonth(e.target.value)}
+											type="date"
+											value={exemptionEffectiveDate}
+											onChange={(e) => setExemptionEffectiveDate(e.target.value)}
 											className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-white"
 										/>
-										<p className="text-xs text-gray-500 mt-1">
-											Effective date will be the 1st of the selected month ({exemptionEffectiveMonth}-01)
-										</p>
 									</div>
+
+									{isValueChangeType && (
+										<div className="mb-4">
+											<label className="block text-sm font-medium text-gray-700 mb-1">
+												New Value
+											</label>
+											<p className="text-xs text-gray-500 mb-1">
+												Current value: {formatCurrency(currentAssetValue)}
+											</p>
+											<input
+												type="text"
+												inputMode="decimal"
+												value={formatPriceInput(exemptionNewValue || "")}
+												onChange={(e) => {
+													const raw = normalizeValueInput(e.target.value);
+													setExemptionNewValue(raw);
+												}}
+												placeholder="0.00"
+												className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-white ${(!hasValidNewValue || !meetsValueRule) ? 'border-amber-300' : 'border-gray-300'}`}
+											/>
+											{!hasValidNewValue && (
+												<p className="text-xs text-amber-700 mt-1">Enter a valid number.</p>
+											)}
+											{hasValidNewValue && !meetsValueRule && (
+												<p className="text-xs text-amber-700 mt-1">
+													{selectedExemptionType === "Impairment"
+														? "New value must be less than the current value."
+														: selectedExemptionType === "Improvement"
+														? "New value must be greater than the current value."
+														: "New value must differ from the current value."}
+												</p>
+											)}
+										</div>
+									)}
+
+									{isValueChangeType && (
+										<div className="mb-4">
+											<label className="block text-sm font-medium text-gray-700 mb-1">
+												Reason / Note
+											</label>
+											<textarea
+												value={exemptionNote}
+												onChange={(e) => setExemptionNote(e.target.value)}
+												rows={3}
+												className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-white ${!hasValidNote ? 'border-amber-300' : 'border-gray-300'}`}
+												placeholder="Provide the reason for this change..."
+											/>
+											{!hasValidNote && (
+												<p className="text-xs text-amber-700 mt-1">A reason is required for this exemption.</p>
+											)}
+										</div>
+									)}
+
+									{isMethodChangeType && (
+										<div className="mb-4 space-y-4">
+											<div className="border rounded-lg p-4">
+												<h4 className="font-medium text-gray-900 mb-3">Accounting Depreciation</h4>
+												<div className="grid grid-cols-2 gap-3">
+													<div>
+														<label className="block text-sm font-medium text-gray-700 mb-1">Method</label>
+														<select
+															value={exemptionDepnMethodAcc}
+															onChange={(e) => setExemptionDepnMethodAcc(e.target.value)}
+															className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-white"
+														>
+															<option value="SL">Straight-line</option>
+															<option value="DV">Diminishing value</option>
+															<option value="LV">Low-value write-off</option>
+															<option value="ND">Non-depreciable</option>
+														</select>
+													</div>
+													<div>
+														<label className="block text-sm font-medium text-gray-700 mb-1">Rate (%)</label>
+														<input
+															type="number"
+															value={exemptionDepnRateAcc}
+															onChange={(e) => setExemptionDepnRateAcc(e.target.value)}
+															placeholder="e.g., 10"
+															step="0.01"
+															min="0"
+															max="100"
+															className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-white"
+														/>
+													</div>
+												</div>
+											</div>
+											<div className="border rounded-lg p-4">
+												<h4 className="font-medium text-gray-900 mb-3">Tax Depreciation</h4>
+												<div className="grid grid-cols-2 gap-3">
+													<div>
+														<label className="block text-sm font-medium text-gray-700 mb-1">Method</label>
+														<select
+															value={exemptionDepnMethodTax}
+															onChange={(e) => setExemptionDepnMethodTax(e.target.value)}
+															className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-white"
+														>
+															<option value="SL">Straight-line</option>
+															<option value="DV">Diminishing value</option>
+															<option value="LV">Low-value write-off</option>
+															<option value="ND">Non-depreciable</option>
+														</select>
+													</div>
+													<div>
+														<label className="block text-sm font-medium text-gray-700 mb-1">Rate (%)</label>
+														<input
+															type="number"
+															value={exemptionDepnRateTax}
+															onChange={(e) => setExemptionDepnRateTax(e.target.value)}
+															placeholder="e.g., 13.5"
+															step="0.01"
+															min="0"
+															max="100"
+															className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-white"
+														/>
+													</div>
+												</div>
+											</div>
+										</div>
+									)}
+
+									{isCategoryChangeType && (
+										<div className="mb-4">
+											<label className="block text-sm font-medium text-gray-700 mb-1">
+												New Asset Category
+											</label>
+											<select
+												value={exemptionCategory}
+												onChange={(e) => setExemptionCategory(e.target.value)}
+												className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-white ${!hasCategoryValue ? 'border-amber-300' : 'border-gray-300'}`}
+											>
+												<option value="">Select a category</option>
+												{categoryOptions.map((category) => (
+													<option key={category} value={category}>{category}</option>
+												))}
+											</select>
+											{!hasCategoryValue && (
+												<p className="text-xs text-amber-700 mt-1">Category is required.</p>
+											)}
+										</div>
+									)}
 
 									<p className="text-sm text-gray-600 mb-6">
 										This will create a new version of the asset with the exemption type "{selectedExemptionType}". The current version will be preserved in history.
@@ -990,7 +1256,7 @@ export default function Transactions() {
 										</button>
 										<button
 											onClick={handleConfirmExemption}
-											disabled={isSavingExemption}
+											disabled={!canConfirmExemption}
 											className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50"
 										>
 											{isSavingExemption ? "Creating..." : "Confirm & Create Version"}
@@ -1151,7 +1417,7 @@ export default function Transactions() {
 															{result.months.map((month, monthIndex) => (
 																<React.Fragment key={monthIndex}>
 																	<td className={`pl-3 pr-1 py-1 text-xs text-gray-900 ${!month || month.openingValue === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.openingValue) : "-"}</td>
-																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.revalns === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.revalns) : "-"}</td>
+																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.revalns === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatSignedCurrency(month.revalns) : "-"}</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.acquisitions === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.acquisitions) : "-"}</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.disposals === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatDeduction(month.disposals) : "-"}</td>
 																	<td className={`pl-1 pr-3 py-1 text-xs text-gray-900 border-r border-r-gray-300 ${!month || month.depn === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatDeduction(month.depn) : "-"}</td>
@@ -1291,7 +1557,7 @@ export default function Transactions() {
 																	{result.months.map((month, monthIndex) => (
 																<React.Fragment key={monthIndex}>
 																	<td className={`pl-3 pr-1 py-1 text-xs text-gray-900 ${!month || month.openingValue === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.openingValue) : "-"}</td>
-																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.revalns === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.revalns) : "-"}</td>
+																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.revalns === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatSignedCurrency(month.revalns) : "-"}</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.acquisitions === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.acquisitions) : "-"}</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.disposals === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatDeduction(month.disposals) : "-"}</td>
 																	<td className={`pl-1 pr-3 py-1 text-xs text-gray-900 border-r border-r-gray-300 ${!month || month.depn === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatDeduction(month.depn) : "-"}</td>

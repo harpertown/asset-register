@@ -34,8 +34,11 @@ export interface Asset {
   versionId?: string;
   assetGuid?: string;
   parentAssetId?: string | null;
+  parentPurchasePrice?: number;
   effectiveFrom?: string;
   exemptionType?: string;
+  exemptionNote?: string;
+  createdAt?: string;
 }
 
 export interface Room {
@@ -73,6 +76,7 @@ export interface Transaction {
   assetId: string;
   assetGuid?: string; // persistent asset identity
   versionId?: string; // version-specific id
+  itemType?: string;
   assetCategory: string;
   assetDescription: string;
   recordDate: string;
