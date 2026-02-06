@@ -159,6 +159,23 @@ export default function RegisterEditingView({
   const [pendingDeleteVersion, setPendingDeleteVersion] = useState<Asset | null>(null);
   const [showAcquisitionReassignModal, setShowAcquisitionReassignModal] = useState(false);
   const [debugSortDirection, setDebugSortDirection] = useState<"asc" | "desc">("asc");
+
+  const getFyTagForDate = (dateString?: string) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return null;
+    const month = date.getMonth() + 1;
+    const year = date.getFullYear();
+    const endYear = month >= 4 ? year + 1 : year;
+    return `fy${String(endYear).slice(-2)}`;
+  };
+
+  const isFirstMonthOfFy = (dateString?: string) => {
+    if (!dateString) return false;
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return false;
+    return date.getMonth() + 1 === 4;
+  };
   
   const wizardRoom = assetWizard.state.roomId
     ? register.rooms.find((r) => r.id === assetWizard.state.roomId)
@@ -422,7 +439,22 @@ export default function RegisterEditingView({
                   <div className="text-gray-500 py-4 text-center">Loading version history...</div>
                 ) : (
                   <div className="overflow-auto flex-1 space-y-3">
-                    {versionHistory.map((version, i) => (
+                    {versionHistory.map((version, i) => {
+                      const isLatestVersion = i === versionHistory.length - 1;
+                      const isAcquisition =
+                        version.exemptionType === "Acquisition" ||
+                        (!version.exemptionType && (version.version === 1 || !version.parentAssetId));
+                      const isExemption = Boolean(version.exemptionType && version.exemptionType !== "Acquisition");
+                      const effectiveDate = isAcquisition
+                        ? (version.purchaseDate || version.effectiveFrom || undefined)
+                        : (version.effectiveFrom || undefined);
+                      const fyTag = isAcquisition
+                        ? getFyTagForDate(version.purchaseDate || version.effectiveFrom || undefined)
+                        : (isLatestVersion && isExemption && isFirstMonthOfFy(version.effectiveFrom))
+                        ? getFyTagForDate(version.effectiveFrom || undefined)
+                        : null;
+
+                      return (
                       <div 
                         key={version.id} 
                         className={`p-4 border rounded-lg ${i === versionHistory.length - 1 ? 'border-blue-300 bg-blue-50' : 'border-gray-200'}`}
@@ -464,10 +496,15 @@ export default function RegisterEditingView({
                                   : version.exemptionType}
                               </span>
                             )}
+                            {fyTag && (
+                              <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600">
+                                {fyTag}
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center gap-3">
-                            {version.effectiveFrom && (
-                              <span className="text-sm text-gray-500">Effective: {version.effectiveFrom}</span>
+                            {effectiveDate && (
+                              <span className="text-sm text-gray-500">Effective: {effectiveDate}</span>
                             )}
                             {versionHistory.length > 1 && (
                               <button
@@ -546,7 +583,8 @@ export default function RegisterEditingView({
                           );
                         })()}
                       </div>
-                    ))}
+                    );
+                  })}
                   </div>
                 )}
               </>

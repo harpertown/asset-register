@@ -293,8 +293,8 @@ export function calculateDepreciationSchedule(
 
 		if (disposalMonth !== null && month === disposalMonth) {
 			// Disposal effective from the start of the month.
-			// Remove the opening book value and stop depreciation for this month.
-			disposals = bookValue;
+			// Show disposals as negative and stop depreciation for this month.
+			disposals = -bookValue;
 			monthDepn = 0;
 		} else if (isNonDepreciable) {
 			monthDepn = 0;
@@ -311,7 +311,7 @@ export function calculateDepreciationSchedule(
 			monthDepn = calculateMonthlyDepreciationDV(bookValue, rate);
 		}
 
-		const closingValue = Math.max(0, bookValue - monthDepn - disposals);
+		const closingValue = Math.max(0, bookValue - monthDepn + disposals);
 
 		months.push({
 			month,

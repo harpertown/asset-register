@@ -50,6 +50,26 @@ export default function Transactions() {
 		if (!entry) return assetGuid;
 		return `${entry.category} - ${entry.description}`;
 	}
+
+	const formatDeduction = (amount: number) => {
+		if (!amount) return "-";
+		return `(${formatCurrency(Math.abs(amount))})`;
+	};
+
+	const formatSignedCurrency = (amount: number) => {
+		if (!amount) return "-";
+		if (amount < 0) return `(${formatCurrency(Math.abs(amount))})`;
+		return formatCurrency(amount);
+	};
+
+	const getFyMonthLabel = (monthIndex: number) => {
+		// FY runs April (Month One) to March (Month Twelve)
+		const endYear = Number(financialYear);
+		const startYear = endYear - 1;
+		const year = monthIndex < 9 ? startYear : endYear;
+		const monthNames = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
+		return `${monthNames[monthIndex]}-${String(year).slice(-2)}`;
+	};
 	const [register, setRegister] = useState<Register | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -1030,18 +1050,78 @@ export default function Transactions() {
 																</span>
 															</div>
 														</th>
-														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>Month One</th>
-														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>Month Two</th>
-														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>Month Three</th>
-														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>Month Four</th>
-														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>Month Five</th>
-														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>Month Six</th>
-														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>Month Seven</th>
-														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>Month Eight</th>
-														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>Month Nine</th>
-														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>Month Ten</th>
-														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>Month Eleven</th>
-														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>Month Twelve</th>
+														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>
+															<div className="flex flex-col items-center leading-tight">
+																<span>Month One</span>
+																<span className="text-xs text-gray-400">{getFyMonthLabel(0)}</span>
+															</div>
+														</th>
+														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>
+															<div className="flex flex-col items-center leading-tight">
+																<span>Month Two</span>
+																<span className="text-xs text-gray-400">{getFyMonthLabel(1)}</span>
+															</div>
+														</th>
+														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>
+															<div className="flex flex-col items-center leading-tight">
+																<span>Month Three</span>
+																<span className="text-xs text-gray-400">{getFyMonthLabel(2)}</span>
+															</div>
+														</th>
+														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>
+															<div className="flex flex-col items-center leading-tight">
+																<span>Month Four</span>
+																<span className="text-xs text-gray-400">{getFyMonthLabel(3)}</span>
+															</div>
+														</th>
+														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>
+															<div className="flex flex-col items-center leading-tight">
+																<span>Month Five</span>
+																<span className="text-xs text-gray-400">{getFyMonthLabel(4)}</span>
+															</div>
+														</th>
+														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>
+															<div className="flex flex-col items-center leading-tight">
+																<span>Month Six</span>
+																<span className="text-xs text-gray-400">{getFyMonthLabel(5)}</span>
+															</div>
+														</th>
+														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>
+															<div className="flex flex-col items-center leading-tight">
+																<span>Month Seven</span>
+																<span className="text-xs text-gray-400">{getFyMonthLabel(6)}</span>
+															</div>
+														</th>
+														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>
+															<div className="flex flex-col items-center leading-tight">
+																<span>Month Eight</span>
+																<span className="text-xs text-gray-400">{getFyMonthLabel(7)}</span>
+															</div>
+														</th>
+														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>
+															<div className="flex flex-col items-center leading-tight">
+																<span>Month Nine</span>
+																<span className="text-xs text-gray-400">{getFyMonthLabel(8)}</span>
+															</div>
+														</th>
+														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>
+															<div className="flex flex-col items-center leading-tight">
+																<span>Month Ten</span>
+																<span className="text-xs text-gray-400">{getFyMonthLabel(9)}</span>
+															</div>
+														</th>
+														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>
+															<div className="flex flex-col items-center leading-tight">
+																<span>Month Eleven</span>
+																<span className="text-xs text-gray-400">{getFyMonthLabel(10)}</span>
+															</div>
+														</th>
+														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b border-r border-r-gray-300" colSpan={5}>
+															<div className="flex flex-col items-center leading-tight">
+																<span>Month Twelve</span>
+																<span className="text-xs text-gray-400">{getFyMonthLabel(11)}</span>
+															</div>
+														</th>
 														<th className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-b" colSpan={6}>
 															Acc classification at close
 														</th>
@@ -1073,16 +1153,16 @@ export default function Transactions() {
 																	<td className={`pl-3 pr-1 py-1 text-xs text-gray-900 ${!month || month.openingValue === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.openingValue) : "-"}</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.revalns === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.revalns) : "-"}</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.acquisitions === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.acquisitions) : "-"}</td>
-																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.disposals === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.disposals) : "-"}</td>
-																	<td className={`pl-1 pr-3 py-1 text-xs text-gray-900 border-r border-r-gray-300 ${!month || month.depn === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.depn) : "-"}</td>
+																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.disposals === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatDeduction(month.disposals) : "-"}</td>
+																	<td className={`pl-1 pr-3 py-1 text-xs text-gray-900 border-r border-r-gray-300 ${!month || month.depn === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatDeduction(month.depn) : "-"}</td>
 																</React.Fragment>
 															))}
-															<td className={`px-2 py-1 text-xs text-gray-900 ${result.open === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatCurrency(result.open)}</td>
-															<td className={`px-2 py-1 text-xs text-gray-900 ${result.totalRevals === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatCurrency(result.totalRevals)}</td>
-															<td className={`px-2 py-1 text-xs text-gray-900 ${result.totalAdditions === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatCurrency(result.totalAdditions)}</td>
-															<td className={`px-2 py-1 text-xs text-gray-900 ${result.totalDisposals === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatCurrency(result.totalDisposals)}</td>
-															<td className={`px-2 py-1 text-xs text-gray-900 ${result.totalDepn === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatCurrency(result.totalDepn)}</td>
-															<td className={`px-2 py-1 text-xs text-gray-900 ${result.close === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatCurrency(result.close)}</td>
+															<td className={`px-2 py-1 text-xs text-gray-900 ${result.open === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatSignedCurrency(result.open)}</td>
+															<td className={`px-2 py-1 text-xs text-gray-900 ${result.totalRevals === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatSignedCurrency(result.totalRevals)}</td>
+															<td className={`px-2 py-1 text-xs text-gray-900 ${result.totalAdditions === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatSignedCurrency(result.totalAdditions)}</td>
+															<td className={`px-2 py-1 text-xs text-gray-900 ${result.totalDisposals === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatDeduction(result.totalDisposals)}</td>
+															<td className={`px-2 py-1 text-xs text-gray-900 ${result.totalDepn === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatDeduction(result.totalDepn)}</td>
+															<td className={`px-2 py-1 text-xs text-gray-900 ${result.close === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatSignedCurrency(result.close)}</td>
 														</tr>
 													))}
 												</tbody>
@@ -1098,19 +1178,19 @@ export default function Transactions() {
 															return (
 																<React.Fragment key={i}>
 																	<td className={`pl-3 pr-1 py-1 text-xs text-gray-900 ${openTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatCurrency(openTotal)}
+																		{formatSignedCurrency(openTotal)}
 																	</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${revalsTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatCurrency(revalsTotal)}
+																		{formatSignedCurrency(revalsTotal)}
 																	</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${acqTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatCurrency(acqTotal)}
+																		{formatSignedCurrency(acqTotal)}
 																	</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${dispTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatCurrency(dispTotal)}
+																		{formatDeduction(dispTotal)}
 																	</td>
 																	<td className={`pl-1 pr-3 py-1 text-xs text-gray-900 border-r border-r-gray-300 ${depnTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatCurrency(depnTotal)}
+																		{formatDeduction(depnTotal)}
 																	</td>
 																</React.Fragment>
 															);
@@ -1125,22 +1205,22 @@ export default function Transactions() {
 															return (
 																<>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${openTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatCurrency(openTotal)}
+																		{formatSignedCurrency(openTotal)}
 																	</td>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${revalsTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatCurrency(revalsTotal)}
+																		{formatSignedCurrency(revalsTotal)}
 																	</td>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${additionsTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatCurrency(additionsTotal)}
+																		{formatSignedCurrency(additionsTotal)}
 																	</td>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${disposalsTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatCurrency(disposalsTotal)}
+																		{formatDeduction(disposalsTotal)}
 																	</td>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${depnTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatCurrency(depnTotal)}
+																		{formatDeduction(depnTotal)}
 																	</td>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${closeTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatCurrency(closeTotal)}
+																		{formatSignedCurrency(closeTotal)}
 																	</td>
 																</>
 															);
@@ -1213,16 +1293,16 @@ export default function Transactions() {
 																	<td className={`pl-3 pr-1 py-1 text-xs text-gray-900 ${!month || month.openingValue === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.openingValue) : "-"}</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.revalns === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.revalns) : "-"}</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.acquisitions === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.acquisitions) : "-"}</td>
-																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.disposals === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.disposals) : "-"}</td>
-																	<td className={`pl-1 pr-3 py-1 text-xs text-gray-900 border-r border-r-gray-300 ${!month || month.depn === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.depn) : "-"}</td>
+																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.disposals === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatDeduction(month.disposals) : "-"}</td>
+																	<td className={`pl-1 pr-3 py-1 text-xs text-gray-900 border-r border-r-gray-300 ${!month || month.depn === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatDeduction(month.depn) : "-"}</td>
 																</React.Fragment>
 															))}
-															<td className={`px-2 py-1 text-xs text-gray-900 ${result.open === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatCurrency(result.open)}</td>
-															<td className={`px-2 py-1 text-xs text-gray-900 ${result.totalRevals === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatCurrency(result.totalRevals)}</td>
-															<td className={`px-2 py-1 text-xs text-gray-900 ${result.totalAdditions === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatCurrency(result.totalAdditions)}</td>
-															<td className={`px-2 py-1 text-xs text-gray-900 ${result.totalDisposals === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatCurrency(result.totalDisposals)}</td>
-															<td className={`px-2 py-1 text-xs text-gray-900 ${result.totalDepn === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatCurrency(result.totalDepn)}</td>
-															<td className={`px-2 py-1 text-xs text-gray-900 ${result.close === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatCurrency(result.close)}</td>
+															<td className={`px-2 py-1 text-xs text-gray-900 ${result.open === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatSignedCurrency(result.open)}</td>
+															<td className={`px-2 py-1 text-xs text-gray-900 ${result.totalRevals === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatSignedCurrency(result.totalRevals)}</td>
+															<td className={`px-2 py-1 text-xs text-gray-900 ${result.totalAdditions === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatSignedCurrency(result.totalAdditions)}</td>
+															<td className={`px-2 py-1 text-xs text-gray-900 ${result.totalDisposals === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatDeduction(result.totalDisposals)}</td>
+															<td className={`px-2 py-1 text-xs text-gray-900 ${result.totalDepn === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatDeduction(result.totalDepn)}</td>
+															<td className={`px-2 py-1 text-xs text-gray-900 ${result.close === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatSignedCurrency(result.close)}</td>
 														</tr>
 													))}
 												</tbody>
@@ -1238,19 +1318,19 @@ export default function Transactions() {
 															return (
 																<React.Fragment key={i}>
 																	<td className={`pl-3 pr-1 py-1 text-xs text-gray-900 ${openTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatCurrency(openTotal)}
+																		{formatSignedCurrency(openTotal)}
 																	</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${revalsTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatCurrency(revalsTotal)}
+																		{formatSignedCurrency(revalsTotal)}
 																	</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${acqTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatCurrency(acqTotal)}
+																		{formatSignedCurrency(acqTotal)}
 																	</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${dispTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatCurrency(dispTotal)}
+																		{formatDeduction(dispTotal)}
 																	</td>
 																	<td className={`pl-1 pr-3 py-1 text-xs text-gray-900 border-r border-r-gray-300 ${depnTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatCurrency(depnTotal)}
+																		{formatDeduction(depnTotal)}
 																	</td>
 																</React.Fragment>
 															);
@@ -1265,22 +1345,22 @@ export default function Transactions() {
 															return (
 																<>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${openTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatCurrency(openTotal)}
+																		{formatSignedCurrency(openTotal)}
 																	</td>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${revalsTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatCurrency(revalsTotal)}
+																		{formatSignedCurrency(revalsTotal)}
 																	</td>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${additionsTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatCurrency(additionsTotal)}
+																		{formatSignedCurrency(additionsTotal)}
 																	</td>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${disposalsTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatCurrency(disposalsTotal)}
+																		{formatDeduction(disposalsTotal)}
 																	</td>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${depnTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatCurrency(depnTotal)}
+																		{formatDeduction(depnTotal)}
 																	</td>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${closeTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatCurrency(closeTotal)}
+																		{formatSignedCurrency(closeTotal)}
 																	</td>
 																</>
 															);
@@ -1382,8 +1462,8 @@ export default function Transactions() {
 															<td className="px-4 py-2 text-gray-900 text-right">{formatCurrency(result.openingBookValue)}</td>
 															<td className="px-4 py-2 text-gray-900 text-right">{formatCurrency(result.revaluations)}</td>
 															<td className="px-4 py-2 text-gray-900 text-right">{formatCurrency(result.additions)}</td>
-															<td className="px-4 py-2 text-gray-900 text-right">{formatCurrency(result.disposals)}</td>
-															<td className="px-4 py-2 text-gray-900 text-right">{formatCurrency(result.depreciation)}</td>
+															<td className="px-4 py-2 text-gray-900 text-right">{formatDeduction(result.disposals)}</td>
+															<td className="px-4 py-2 text-gray-900 text-right">{formatDeduction(result.depreciation)}</td>
 															<td className="px-4 py-2 text-gray-900 text-right">{formatCurrency(result.closingBookValue)}</td>
 														</tr>
 													))}
@@ -1401,10 +1481,10 @@ export default function Transactions() {
 															{formatCurrency(summaryAccountingResults.reduce((sum, r) => sum + r.additions, 0))}
 														</td>
 														<td className="px-4 py-2 text-gray-900 text-right">
-															{formatCurrency(summaryAccountingResults.reduce((sum, r) => sum + r.disposals, 0))}
+															{formatDeduction(summaryAccountingResults.reduce((sum, r) => sum + r.disposals, 0))}
 														</td>
 														<td className="px-4 py-2 text-gray-900 text-right">
-															{formatCurrency(summaryAccountingResults.reduce((sum, r) => sum + r.depreciation, 0))}
+															{formatDeduction(summaryAccountingResults.reduce((sum, r) => sum + r.depreciation, 0))}
 														</td>
 														<td className="px-4 py-2 text-gray-900 text-right">
 															{formatCurrency(summaryAccountingResults.reduce((sum, r) => sum + r.closingBookValue, 0))}
@@ -1438,8 +1518,8 @@ export default function Transactions() {
 															<td className="px-4 py-2 text-gray-900 text-right">{formatCurrency(result.openingBookValue)}</td>
 															<td className="px-4 py-2 text-gray-900 text-right">{formatCurrency(result.revaluations)}</td>
 															<td className="px-4 py-2 text-gray-900 text-right">{formatCurrency(result.additions)}</td>
-															<td className="px-4 py-2 text-gray-900 text-right">{formatCurrency(result.disposals)}</td>
-															<td className="px-4 py-2 text-gray-900 text-right">{formatCurrency(result.depreciation)}</td>
+															<td className="px-4 py-2 text-gray-900 text-right">{formatDeduction(result.disposals)}</td>
+															<td className="px-4 py-2 text-gray-900 text-right">{formatDeduction(result.depreciation)}</td>
 															<td className="px-4 py-2 text-gray-900 text-right">{formatCurrency(result.closingBookValue)}</td>
 														</tr>
 													))}
@@ -1457,10 +1537,10 @@ export default function Transactions() {
 															{formatCurrency(summaryTaxResults.reduce((sum, r) => sum + r.additions, 0))}
 														</td>
 														<td className="px-4 py-2 text-gray-900 text-right">
-															{formatCurrency(summaryTaxResults.reduce((sum, r) => sum + r.disposals, 0))}
+															{formatDeduction(summaryTaxResults.reduce((sum, r) => sum + r.disposals, 0))}
 														</td>
 														<td className="px-4 py-2 text-gray-900 text-right">
-															{formatCurrency(summaryTaxResults.reduce((sum, r) => sum + r.depreciation, 0))}
+															{formatDeduction(summaryTaxResults.reduce((sum, r) => sum + r.depreciation, 0))}
 														</td>
 														<td className="px-4 py-2 text-gray-900 text-right">
 															{formatCurrency(summaryTaxResults.reduce((sum, r) => sum + r.closingBookValue, 0))}
