@@ -437,6 +437,14 @@ export default function RegisterEditingView({
 
             <div className="flex flex-col gap-2">
               {register.sitePlan ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setShowSitePlan((prev) => !prev)}
+                    className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+                  >
+                    {showSitePlan ? "Hide sitemap" : "View sitemap"}
+                  </button>
                 <DrawingToolbar
                   wizardActive={wizardActive}
                   selectedTool={selectedTool}
@@ -466,6 +474,7 @@ export default function RegisterEditingView({
                   registerCompleted={register.wizardCompleted ?? false}
                   layout="vertical"
                 />
+                </>
               ) : hasWorkspace ? (
                 <>
                   <button
@@ -785,9 +794,6 @@ export default function RegisterEditingView({
                             </span>
                           </div>
                         </th>
-                        <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">
-                          Version GUID
-                        </th>
                         <th 
                           className="px-3 py-2 text-left font-medium text-gray-700 border-b cursor-pointer hover:bg-gray-200 select-none"
                           onClick={() => handleDebugSort("assetId")}
@@ -820,7 +826,6 @@ export default function RegisterEditingView({
                           onClick={() => handleAssetClick(asset)}
                         >
                           <td className="px-3 py-2 text-gray-900 font-mono text-xs">{asset.assetGuid || asset.id}</td>
-                          <td className="px-3 py-2 text-gray-900 font-mono text-xs">{asset.versionId || asset.id}</td>
                           <td className="px-3 py-2 text-gray-900">{asset.assetId || "-"}</td>
                           <td className="px-3 py-2 text-gray-900">{asset.name}</td>
                         </tr>

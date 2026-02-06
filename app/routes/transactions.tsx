@@ -3,12 +3,13 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router";
 import React from "react";
+import ModalWrapper from "~/components/ModalWrapper";
 import { apiService } from "~/services/api";
 import { calculateDepreciationScheduleFromHistory, calculateCategorySummaryFromHistory } from "~/services/depreciationService";
 import type { Register, Transaction } from "~/types";
 import type { DepreciationSchedule, CategorySummary } from "~/services/depreciationService";
 import { formatCurrency, currencyCellStyle, calculateFinancialPeriod, formatDate, formatPriceInput, parsePriceInput } from "~/utils";
-import { ASSET_CATEGORIES } from "~/constants";
+import { IRD_ASSET_TYPES } from "~/constants";
 
 export function meta() {
 	return [
@@ -188,6 +189,41 @@ export default function Transactions() {
 			setFySortDirection("asc");
 		}
 	};
+
+	const buildFyTitle = (
+		assetLabel: string,
+		label: string,
+		value: string,
+		monthIndex?: number,
+		classification?: "Accounting" | "Tax"
+	) => {
+		const monthInfo = monthIndex !== undefined ? `Month ${monthIndex + 1} (${getFyMonthLabel(monthIndex)})` : null;
+		const labelText = classification ? `${label} (${classification})` : label;
+		return `${assetLabel}\n${monthInfo ? `${monthInfo} — ` : ""}${labelText}: ${value}`;
+	};
+
+	const buildRevaluationDetails = (details?: { type: string; note?: string; value: number }[]) => {
+		if (!details || details.length === 0) return "";
+		const lines = details.map((detail) => {
+			const noteText = detail.note ? ` | Note: ${detail.note}` : "";
+			return `Type: ${detail.type} (${formatSignedCurrency(detail.value)})${noteText}`;
+		});
+		return `\n${lines.join("\n")}`;
+	};
+
+	const [tooltip, setTooltip] = useState<{ content: string; x: number; y: number } | null>(null);
+	const hideTooltip = () => setTooltip(null);
+	const showTooltip = (content: string, x: number, y: number) => setTooltip({ content, x, y });
+	const updateTooltip = (x: number, y: number) =>
+		setTooltip((prev) => (prev ? { ...prev, x, y } : prev));
+	const tooltipProps = (content: string | null, enabled: boolean) =>
+		enabled && content
+			? {
+					onMouseEnter: (e: React.MouseEvent) => showTooltip(content, e.clientX, e.clientY),
+					onMouseMove: (e: React.MouseEvent) => updateTooltip(e.clientX, e.clientY),
+					onMouseLeave: hideTooltip,
+			  }
+			: {};
 
 	// Sorted transactions for main table
 	const sortedTransactions = useMemo(() => {
@@ -547,7 +583,7 @@ export default function Transactions() {
 	const isMethodChangeType = selectedExemptionType === methodChangeTypeId;
 	const isCategoryChangeType = selectedExemptionType === categoryChangeTypeId;
 	const categoryOptions = useMemo(() => {
-		const options = [...ASSET_CATEGORIES];
+		const options = [...IRD_ASSET_TYPES];
 		if (exemptionCategory && !options.includes(exemptionCategory)) {
 			options.unshift(exemptionCategory);
 		}
@@ -1233,20 +1269,20 @@ export default function Transactions() {
 									{isCategoryChangeType && (
 										<div className="mb-4">
 											<label className="block text-sm font-medium text-gray-700 mb-1">
-												New Asset Category
+												New Asset Type
 											</label>
 											<select
 												value={exemptionCategory}
 												onChange={(e) => setExemptionCategory(e.target.value)}
 												className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-white ${!hasCategoryValue ? 'border-amber-300' : 'border-gray-300'}`}
 											>
-												<option value="">Select a category</option>
+												<option value="">Select an asset type</option>
 												{categoryOptions.map((category) => (
 													<option key={category} value={category}>{category}</option>
 												))}
 											</select>
 											{!hasCategoryValue && (
-												<p className="text-xs text-amber-700 mt-1">Category is required.</p>
+												<p className="text-xs text-amber-700 mt-1">Asset type is required.</p>
 											)}
 										</div>
 									)}
@@ -1280,22 +1316,37 @@ export default function Transactions() {
 				)}
 
 				{/* Depreciation Results Modal */}
-				{showDepreciationModal && (
-					<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-						<div className="bg-white rounded-lg p-6 shadow-xl max-w-7xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-							<div className="flex items-center justify-between mb-4">
-								<h2 className="text-xl font-semibold text-gray-900">
-									{depreciationType === "working" ? "FY Working" : "FY Register"} - Year ended 31 March {financialYear}
-								</h2>
-								<button
-									onClick={() => setShowDepreciationModal(false)}
-									className="text-gray-400 hover:text-gray-600"
-								>
-									<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-									</svg>
-								</button>
-							</div>
+				<ModalWrapper
+					isOpen={showDepreciationModal}
+					onClose={() => setShowDepreciationModal(false)}
+					maxWidth="max-w-7xl"
+				>
+					{tooltip && (
+						<div
+							className="fixed z-[70] max-w-[260px] rounded-lg bg-[#14110c]/95 px-3 py-2 text-xs text-[#fef9f1] shadow-xl"
+							style={{
+								left: tooltip.x + 12,
+								top: tooltip.y + 12,
+								whiteSpace: "pre-line",
+								pointerEvents: "none",
+							}}
+						>
+							{tooltip.content}
+						</div>
+					)}
+					<div className="flex items-center justify-between mb-4">
+						<h2 className="text-xl font-semibold text-gray-900">
+							{depreciationType === "working" ? "FY Working" : "FY Register"} - Year ended 31 March {financialYear}
+						</h2>
+						<button
+							onClick={() => setShowDepreciationModal(false)}
+							className="text-gray-400 hover:text-gray-600"
+						>
+							<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+							</svg>
+						</button>
+					</div>
 
 							{depreciationType === "working" ? (
 								<>
@@ -1422,26 +1473,137 @@ export default function Transactions() {
 													</tr>
 												</thead>
 												<tbody>
-													{sortedScheduleAccountingResults.map((result, index) => (
-														<tr key={index} className="border-b hover:bg-gray-50">
-															<td className="px-2 py-1 text-xs text-gray-900 font-medium">{result.assetId || "-"}</td>
-															{result.months.map((month, monthIndex) => (
-																<React.Fragment key={monthIndex}>
-																	<td className={`pl-3 pr-1 py-1 text-xs text-gray-900 ${!month || month.openingValue === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.openingValue) : "-"}</td>
-																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.revalns === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatSignedCurrency(month.revalns) : "-"}</td>
-																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.acquisitions === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.acquisitions) : "-"}</td>
-																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.disposals === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatDeduction(month.disposals) : "-"}</td>
-																	<td className={`pl-1 pr-3 py-1 text-xs text-gray-900 border-r border-r-gray-300 ${!month || month.depn === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatDeduction(month.depn) : "-"}</td>
-																</React.Fragment>
-															))}
-															<td className={`px-2 py-1 text-xs text-gray-900 ${result.open === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatSignedCurrency(result.open)}</td>
-															<td className={`px-2 py-1 text-xs text-gray-900 ${result.totalRevals === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatSignedCurrency(result.totalRevals)}</td>
-															<td className={`px-2 py-1 text-xs text-gray-900 ${result.totalAdditions === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatSignedCurrency(result.totalAdditions)}</td>
-															<td className={`px-2 py-1 text-xs text-gray-900 ${result.totalDisposals === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatDeduction(result.totalDisposals)}</td>
-															<td className={`px-2 py-1 text-xs text-gray-900 ${result.totalDepn === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatDeduction(result.totalDepn)}</td>
-															<td className={`px-2 py-1 text-xs text-gray-900 ${result.close === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatSignedCurrency(result.close)}</td>
-														</tr>
-													))}
+													{sortedScheduleAccountingResults.map((result, index) => {
+														const assetLabel = `${result.assetId || "-"} — ${result.name}`;
+														return (
+															<tr key={index} className="border-b hover:bg-gray-50">
+																<td className="px-2 py-1 text-xs text-gray-900 font-medium">{result.assetId || "-"}</td>
+																{result.months.map((month, monthIndex) => {
+																	const openValue = month ? formatCurrency(month.openingValue) : "-";
+																	const revalValue = month ? formatSignedCurrency(month.revalns) : "-";
+																	const acqValue = month ? formatCurrency(month.acquisitions) : "-";
+																	const dispValue = month ? formatDeduction(month.disposals) : "-";
+																	const depnValue = month ? formatDeduction(month.depn) : "-";
+																	return (
+																		<React.Fragment key={monthIndex}>
+																			<td
+																				className={`pl-3 pr-1 py-1 text-xs text-gray-900 ${!month || month.openingValue === 0 ? "text-center" : "text-right"}`}
+																				style={currencyCellStyle}
+																				{...tooltipProps(
+																					month ? buildFyTitle(assetLabel, "Opening", openValue, monthIndex) : null,
+																					Boolean(month && month.openingValue)
+																				)}
+																			>
+																				{openValue}
+																			</td>
+																			<td
+																				className={`px-1 py-1 text-xs text-gray-900 ${!month || month.revalns === 0 ? "text-center" : "text-right"}`}
+																				style={currencyCellStyle}
+																				{...tooltipProps(
+																					month
+																						? `${buildFyTitle(assetLabel, "Revaluation", revalValue, monthIndex)}${buildRevaluationDetails(month.revalDetails)}`
+																						: null,
+																					Boolean(month && month.revalns)
+																				)}
+																			>
+																				{revalValue}
+																			</td>
+																			<td
+																				className={`px-1 py-1 text-xs text-gray-900 ${!month || month.acquisitions === 0 ? "text-center" : "text-right"}`}
+																				style={currencyCellStyle}
+																				{...tooltipProps(
+																					month ? buildFyTitle(assetLabel, "Acquisition", acqValue, monthIndex) : null,
+																					Boolean(month && month.acquisitions)
+																				)}
+																			>
+																				{acqValue}
+																			</td>
+																			<td
+																				className={`px-1 py-1 text-xs text-gray-900 ${!month || month.disposals === 0 ? "text-center" : "text-right"}`}
+																				style={currencyCellStyle}
+																				{...tooltipProps(
+																					month ? buildFyTitle(assetLabel, "Disposal", dispValue, monthIndex) : null,
+																					Boolean(month && month.disposals)
+																				)}
+																			>
+																				{dispValue}
+																			</td>
+																			<td
+																				className={`pl-1 pr-3 py-1 text-xs text-gray-900 border-r border-r-gray-300 ${!month || month.depn === 0 ? "text-center" : "text-right"}`}
+																				style={currencyCellStyle}
+																				{...tooltipProps(
+																					month ? buildFyTitle(assetLabel, "Depreciation", depnValue, monthIndex, "Accounting") : null,
+																					Boolean(month && month.depn)
+																				)}
+																			>
+																				{depnValue}
+																			</td>
+																		</React.Fragment>
+																	);
+																})}
+																<td
+																	className={`px-2 py-1 text-xs text-gray-900 ${result.open === 0 ? "text-center" : "text-right"}`}
+																	style={currencyCellStyle}
+																	{...tooltipProps(
+																		buildFyTitle(assetLabel, "Open", formatSignedCurrency(result.open)),
+																		Boolean(result.open)
+																	)}
+																>
+																	{formatSignedCurrency(result.open)}
+																</td>
+																<td
+																	className={`px-2 py-1 text-xs text-gray-900 ${result.totalRevals === 0 ? "text-center" : "text-right"}`}
+																	style={currencyCellStyle}
+																	{...tooltipProps(
+																		buildFyTitle(assetLabel, "Total revaluations", formatSignedCurrency(result.totalRevals)),
+																		Boolean(result.totalRevals)
+																	)}
+																>
+																	{formatSignedCurrency(result.totalRevals)}
+																</td>
+																<td
+																	className={`px-2 py-1 text-xs text-gray-900 ${result.totalAdditions === 0 ? "text-center" : "text-right"}`}
+																	style={currencyCellStyle}
+																	{...tooltipProps(
+																		buildFyTitle(assetLabel, "Total additions", formatSignedCurrency(result.totalAdditions)),
+																		Boolean(result.totalAdditions)
+																	)}
+																>
+																	{formatSignedCurrency(result.totalAdditions)}
+																</td>
+																<td
+																	className={`px-2 py-1 text-xs text-gray-900 ${result.totalDisposals === 0 ? "text-center" : "text-right"}`}
+																	style={currencyCellStyle}
+																	{...tooltipProps(
+																		buildFyTitle(assetLabel, "Total disposals", formatDeduction(result.totalDisposals)),
+																		Boolean(result.totalDisposals)
+																	)}
+																>
+																	{formatDeduction(result.totalDisposals)}
+																</td>
+																<td
+																	className={`px-2 py-1 text-xs text-gray-900 ${result.totalDepn === 0 ? "text-center" : "text-right"}`}
+																	style={currencyCellStyle}
+																	{...tooltipProps(
+																		buildFyTitle(assetLabel, "Total depreciation", formatDeduction(result.totalDepn), undefined, "Accounting"),
+																		Boolean(result.totalDepn)
+																	)}
+																>
+																	{formatDeduction(result.totalDepn)}
+																</td>
+																<td
+																	className={`px-2 py-1 text-xs text-gray-900 ${result.close === 0 ? "text-center" : "text-right"}`}
+																	style={currencyCellStyle}
+																	{...tooltipProps(
+																		buildFyTitle(assetLabel, "Close", formatSignedCurrency(result.close)),
+																		Boolean(result.close)
+																	)}
+																>
+																	{formatSignedCurrency(result.close)}
+																</td>
+															</tr>
+														);
+													})}
 												</tbody>
 												<tfoot>
 													<tr className="bg-gray-100 font-semibold">
@@ -1452,22 +1614,58 @@ export default function Transactions() {
 																const acqTotal = scheduleAccountingResults.reduce((sum, r) => sum + (r.months[i]?.acquisitions || 0), 0);
 																const dispTotal = scheduleAccountingResults.reduce((sum, r) => sum + (r.months[i]?.disposals || 0), 0);
 																const depnTotal = scheduleAccountingResults.reduce((sum, r) => sum + (r.months[i]?.depn || 0), 0);
+																const totalLabel = "All assets";
 															return (
 																<React.Fragment key={i}>
 																	<td className={`pl-3 pr-1 py-1 text-xs text-gray-900 ${openTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatSignedCurrency(openTotal)}
+																		<span
+																			{...tooltipProps(
+																				buildFyTitle(totalLabel, "Opening", formatSignedCurrency(openTotal), i),
+																				Boolean(openTotal)
+																			)}
+																		>
+																			{formatSignedCurrency(openTotal)}
+																		</span>
 																	</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${revalsTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatSignedCurrency(revalsTotal)}
+																		<span
+																			{...tooltipProps(
+																				buildFyTitle(totalLabel, "Revaluation", formatSignedCurrency(revalsTotal), i),
+																				Boolean(revalsTotal)
+																			)}
+																		>
+																			{formatSignedCurrency(revalsTotal)}
+																		</span>
 																	</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${acqTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatSignedCurrency(acqTotal)}
+																		<span
+																			{...tooltipProps(
+																				buildFyTitle(totalLabel, "Acquisition", formatSignedCurrency(acqTotal), i),
+																				Boolean(acqTotal)
+																			)}
+																		>
+																			{formatSignedCurrency(acqTotal)}
+																		</span>
 																	</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${dispTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatDeduction(dispTotal)}
+																		<span
+																			{...tooltipProps(
+																				buildFyTitle(totalLabel, "Disposal", formatDeduction(dispTotal), i),
+																				Boolean(dispTotal)
+																			)}
+																		>
+																			{formatDeduction(dispTotal)}
+																		</span>
 																	</td>
 																	<td className={`pl-1 pr-3 py-1 text-xs text-gray-900 border-r border-r-gray-300 ${depnTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatDeduction(depnTotal)}
+																		<span
+																			{...tooltipProps(
+																				buildFyTitle(totalLabel, "Depreciation", formatDeduction(depnTotal), i, "Accounting"),
+																				Boolean(depnTotal)
+																			)}
+																		>
+																			{formatDeduction(depnTotal)}
+																		</span>
 																	</td>
 																</React.Fragment>
 															);
@@ -1479,25 +1677,68 @@ export default function Transactions() {
 																const disposalsTotal = scheduleAccountingResults.reduce((sum, r) => sum + r.totalDisposals, 0);
 																const depnTotal = scheduleAccountingResults.reduce((sum, r) => sum + r.totalDepn, 0);
 																const closeTotal = scheduleAccountingResults.reduce((sum, r) => sum + r.close, 0);
+																const totalLabel = "All assets";
 															return (
 																<>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${openTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatSignedCurrency(openTotal)}
+																		<span
+																			{...tooltipProps(
+																				buildFyTitle(totalLabel, "Open", formatSignedCurrency(openTotal)),
+																				Boolean(openTotal)
+																			)}
+																		>
+																			{formatSignedCurrency(openTotal)}
+																		</span>
 																	</td>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${revalsTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatSignedCurrency(revalsTotal)}
+																		<span
+																			{...tooltipProps(
+																				buildFyTitle(totalLabel, "Total revaluations", formatSignedCurrency(revalsTotal)),
+																				Boolean(revalsTotal)
+																			)}
+																		>
+																			{formatSignedCurrency(revalsTotal)}
+																		</span>
 																	</td>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${additionsTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatSignedCurrency(additionsTotal)}
+																		<span
+																			{...tooltipProps(
+																				buildFyTitle(totalLabel, "Total additions", formatSignedCurrency(additionsTotal)),
+																				Boolean(additionsTotal)
+																			)}
+																		>
+																			{formatSignedCurrency(additionsTotal)}
+																		</span>
 																	</td>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${disposalsTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatDeduction(disposalsTotal)}
+																		<span
+																			{...tooltipProps(
+																				buildFyTitle(totalLabel, "Total disposals", formatDeduction(disposalsTotal)),
+																				Boolean(disposalsTotal)
+																			)}
+																		>
+																			{formatDeduction(disposalsTotal)}
+																		</span>
 																	</td>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${depnTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatDeduction(depnTotal)}
+																		<span
+																			{...tooltipProps(
+																				buildFyTitle(totalLabel, "Total depreciation", formatDeduction(depnTotal), undefined, "Accounting"),
+																				Boolean(depnTotal)
+																			)}
+																		>
+																			{formatDeduction(depnTotal)}
+																		</span>
 																	</td>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${closeTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatSignedCurrency(closeTotal)}
+																		<span
+																			{...tooltipProps(
+																				buildFyTitle(totalLabel, "Close", formatSignedCurrency(closeTotal)),
+																				Boolean(closeTotal)
+																			)}
+																		>
+																			{formatSignedCurrency(closeTotal)}
+																		</span>
 																	</td>
 																</>
 															);
@@ -1562,26 +1803,137 @@ export default function Transactions() {
 													</tr>
 												</thead>
 												<tbody>
-															{sortedScheduleTaxResults.map((result, index) => (
-																<tr key={index} className="border-b hover:bg-gray-50">
-																	<td className="px-2 py-1 text-xs text-gray-900 font-medium">{result.assetId || "-"}</td>
-																	{result.months.map((month, monthIndex) => (
-																<React.Fragment key={monthIndex}>
-																	<td className={`pl-3 pr-1 py-1 text-xs text-gray-900 ${!month || month.openingValue === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.openingValue) : "-"}</td>
-																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.revalns === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatSignedCurrency(month.revalns) : "-"}</td>
-																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.acquisitions === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatCurrency(month.acquisitions) : "-"}</td>
-																	<td className={`px-1 py-1 text-xs text-gray-900 ${!month || month.disposals === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatDeduction(month.disposals) : "-"}</td>
-																	<td className={`pl-1 pr-3 py-1 text-xs text-gray-900 border-r border-r-gray-300 ${!month || month.depn === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{month ? formatDeduction(month.depn) : "-"}</td>
-																</React.Fragment>
-															))}
-															<td className={`px-2 py-1 text-xs text-gray-900 ${result.open === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatSignedCurrency(result.open)}</td>
-															<td className={`px-2 py-1 text-xs text-gray-900 ${result.totalRevals === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatSignedCurrency(result.totalRevals)}</td>
-															<td className={`px-2 py-1 text-xs text-gray-900 ${result.totalAdditions === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatSignedCurrency(result.totalAdditions)}</td>
-															<td className={`px-2 py-1 text-xs text-gray-900 ${result.totalDisposals === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatDeduction(result.totalDisposals)}</td>
-															<td className={`px-2 py-1 text-xs text-gray-900 ${result.totalDepn === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatDeduction(result.totalDepn)}</td>
-															<td className={`px-2 py-1 text-xs text-gray-900 ${result.close === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>{formatSignedCurrency(result.close)}</td>
-														</tr>
-													))}
+															{sortedScheduleTaxResults.map((result, index) => {
+																const assetLabel = `${result.assetId || "-"} — ${result.name}`;
+																return (
+																	<tr key={index} className="border-b hover:bg-gray-50">
+																		<td className="px-2 py-1 text-xs text-gray-900 font-medium">{result.assetId || "-"}</td>
+																		{result.months.map((month, monthIndex) => {
+																			const openValue = month ? formatCurrency(month.openingValue) : "-";
+																			const revalValue = month ? formatSignedCurrency(month.revalns) : "-";
+																			const acqValue = month ? formatCurrency(month.acquisitions) : "-";
+																			const dispValue = month ? formatDeduction(month.disposals) : "-";
+																			const depnValue = month ? formatDeduction(month.depn) : "-";
+																			return (
+																				<React.Fragment key={monthIndex}>
+																					<td
+																						className={`pl-3 pr-1 py-1 text-xs text-gray-900 ${!month || month.openingValue === 0 ? "text-center" : "text-right"}`}
+																						style={currencyCellStyle}
+																						{...tooltipProps(
+																							month ? buildFyTitle(assetLabel, "Opening", openValue, monthIndex) : null,
+																							Boolean(month && month.openingValue)
+																						)}
+																					>
+																						{openValue}
+																					</td>
+																					<td
+																						className={`px-1 py-1 text-xs text-gray-900 ${!month || month.revalns === 0 ? "text-center" : "text-right"}`}
+																						style={currencyCellStyle}
+																						{...tooltipProps(
+																							month
+																								? `${buildFyTitle(assetLabel, "Revaluation", revalValue, monthIndex)}${buildRevaluationDetails(month.revalDetails)}`
+																								: null,
+																							Boolean(month && month.revalns)
+																						)}
+																					>
+																						{revalValue}
+																					</td>
+																					<td
+																						className={`px-1 py-1 text-xs text-gray-900 ${!month || month.acquisitions === 0 ? "text-center" : "text-right"}`}
+																						style={currencyCellStyle}
+																						{...tooltipProps(
+																							month ? buildFyTitle(assetLabel, "Acquisition", acqValue, monthIndex) : null,
+																							Boolean(month && month.acquisitions)
+																						)}
+																					>
+																						{acqValue}
+																					</td>
+																					<td
+																						className={`px-1 py-1 text-xs text-gray-900 ${!month || month.disposals === 0 ? "text-center" : "text-right"}`}
+																						style={currencyCellStyle}
+																						{...tooltipProps(
+																							month ? buildFyTitle(assetLabel, "Disposal", dispValue, monthIndex) : null,
+																							Boolean(month && month.disposals)
+																						)}
+																					>
+																						{dispValue}
+																					</td>
+																					<td
+																						className={`pl-1 pr-3 py-1 text-xs text-gray-900 border-r border-r-gray-300 ${!month || month.depn === 0 ? "text-center" : "text-right"}`}
+																						style={currencyCellStyle}
+																						{...tooltipProps(
+																							month ? buildFyTitle(assetLabel, "Depreciation", depnValue, monthIndex, "Tax") : null,
+																							Boolean(month && month.depn)
+																						)}
+																					>
+																						{depnValue}
+																					</td>
+																				</React.Fragment>
+																			);
+																		})}
+																		<td
+																			className={`px-2 py-1 text-xs text-gray-900 ${result.open === 0 ? "text-center" : "text-right"}`}
+																			style={currencyCellStyle}
+																			{...tooltipProps(
+																				buildFyTitle(assetLabel, "Open", formatSignedCurrency(result.open)),
+																				Boolean(result.open)
+																			)}
+																		>
+																			{formatSignedCurrency(result.open)}
+																		</td>
+																		<td
+																			className={`px-2 py-1 text-xs text-gray-900 ${result.totalRevals === 0 ? "text-center" : "text-right"}`}
+																			style={currencyCellStyle}
+																			{...tooltipProps(
+																				buildFyTitle(assetLabel, "Total revaluations", formatSignedCurrency(result.totalRevals)),
+																				Boolean(result.totalRevals)
+																			)}
+																		>
+																			{formatSignedCurrency(result.totalRevals)}
+																		</td>
+																		<td
+																			className={`px-2 py-1 text-xs text-gray-900 ${result.totalAdditions === 0 ? "text-center" : "text-right"}`}
+																			style={currencyCellStyle}
+																			{...tooltipProps(
+																				buildFyTitle(assetLabel, "Total additions", formatSignedCurrency(result.totalAdditions)),
+																				Boolean(result.totalAdditions)
+																			)}
+																		>
+																			{formatSignedCurrency(result.totalAdditions)}
+																		</td>
+																		<td
+																			className={`px-2 py-1 text-xs text-gray-900 ${result.totalDisposals === 0 ? "text-center" : "text-right"}`}
+																			style={currencyCellStyle}
+																			{...tooltipProps(
+																				buildFyTitle(assetLabel, "Total disposals", formatDeduction(result.totalDisposals)),
+																				Boolean(result.totalDisposals)
+																			)}
+																		>
+																			{formatDeduction(result.totalDisposals)}
+																		</td>
+																		<td
+																			className={`px-2 py-1 text-xs text-gray-900 ${result.totalDepn === 0 ? "text-center" : "text-right"}`}
+																			style={currencyCellStyle}
+																			{...tooltipProps(
+																				buildFyTitle(assetLabel, "Total depreciation", formatDeduction(result.totalDepn), undefined, "Tax"),
+																				Boolean(result.totalDepn)
+																			)}
+																		>
+																			{formatDeduction(result.totalDepn)}
+																		</td>
+																		<td
+																			className={`px-2 py-1 text-xs text-gray-900 ${result.close === 0 ? "text-center" : "text-right"}`}
+																			style={currencyCellStyle}
+																			{...tooltipProps(
+																				buildFyTitle(assetLabel, "Close", formatSignedCurrency(result.close)),
+																				Boolean(result.close)
+																			)}
+																		>
+																			{formatSignedCurrency(result.close)}
+																		</td>
+																	</tr>
+																);
+															})}
 												</tbody>
 												<tfoot>
 													<tr className="bg-gray-100 font-semibold">
@@ -1592,22 +1944,58 @@ export default function Transactions() {
 																const acqTotal = scheduleTaxResults.reduce((sum, r) => sum + (r.months[i]?.acquisitions || 0), 0);
 																const dispTotal = scheduleTaxResults.reduce((sum, r) => sum + (r.months[i]?.disposals || 0), 0);
 																const depnTotal = scheduleTaxResults.reduce((sum, r) => sum + (r.months[i]?.depn || 0), 0);
+																const totalLabel = "All assets";
 															return (
 																<React.Fragment key={i}>
 																	<td className={`pl-3 pr-1 py-1 text-xs text-gray-900 ${openTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatSignedCurrency(openTotal)}
+																		<span
+																			{...tooltipProps(
+																				buildFyTitle(totalLabel, "Opening", formatSignedCurrency(openTotal), i),
+																				Boolean(openTotal)
+																			)}
+																		>
+																			{formatSignedCurrency(openTotal)}
+																		</span>
 																	</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${revalsTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatSignedCurrency(revalsTotal)}
+																		<span
+																			{...tooltipProps(
+																				buildFyTitle(totalLabel, "Revaluation", formatSignedCurrency(revalsTotal), i),
+																				Boolean(revalsTotal)
+																			)}
+																		>
+																			{formatSignedCurrency(revalsTotal)}
+																		</span>
 																	</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${acqTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatSignedCurrency(acqTotal)}
+																		<span
+																			{...tooltipProps(
+																				buildFyTitle(totalLabel, "Acquisition", formatSignedCurrency(acqTotal), i),
+																				Boolean(acqTotal)
+																			)}
+																		>
+																			{formatSignedCurrency(acqTotal)}
+																		</span>
 																	</td>
 																	<td className={`px-1 py-1 text-xs text-gray-900 ${dispTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatDeduction(dispTotal)}
+																		<span
+																			{...tooltipProps(
+																				buildFyTitle(totalLabel, "Disposal", formatDeduction(dispTotal), i),
+																				Boolean(dispTotal)
+																			)}
+																		>
+																			{formatDeduction(dispTotal)}
+																		</span>
 																	</td>
 																	<td className={`pl-1 pr-3 py-1 text-xs text-gray-900 border-r border-r-gray-300 ${depnTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatDeduction(depnTotal)}
+																		<span
+																			{...tooltipProps(
+																				buildFyTitle(totalLabel, "Depreciation", formatDeduction(depnTotal), i, "Tax"),
+																				Boolean(depnTotal)
+																			)}
+																		>
+																			{formatDeduction(depnTotal)}
+																		</span>
 																	</td>
 																</React.Fragment>
 															);
@@ -1619,25 +2007,68 @@ export default function Transactions() {
 																const disposalsTotal = scheduleTaxResults.reduce((sum, r) => sum + r.totalDisposals, 0);
 																const depnTotal = scheduleTaxResults.reduce((sum, r) => sum + r.totalDepn, 0);
 																const closeTotal = scheduleTaxResults.reduce((sum, r) => sum + r.close, 0);
+																const totalLabel = "All assets";
 															return (
 																<>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${openTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatSignedCurrency(openTotal)}
+																		<span
+																			{...tooltipProps(
+																				buildFyTitle(totalLabel, "Open", formatSignedCurrency(openTotal)),
+																				Boolean(openTotal)
+																			)}
+																		>
+																			{formatSignedCurrency(openTotal)}
+																		</span>
 																	</td>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${revalsTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatSignedCurrency(revalsTotal)}
+																		<span
+																			{...tooltipProps(
+																				buildFyTitle(totalLabel, "Total revaluations", formatSignedCurrency(revalsTotal)),
+																				Boolean(revalsTotal)
+																			)}
+																		>
+																			{formatSignedCurrency(revalsTotal)}
+																		</span>
 																	</td>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${additionsTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatSignedCurrency(additionsTotal)}
+																		<span
+																			{...tooltipProps(
+																				buildFyTitle(totalLabel, "Total additions", formatSignedCurrency(additionsTotal)),
+																				Boolean(additionsTotal)
+																			)}
+																		>
+																			{formatSignedCurrency(additionsTotal)}
+																		</span>
 																	</td>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${disposalsTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatDeduction(disposalsTotal)}
+																		<span
+																			{...tooltipProps(
+																				buildFyTitle(totalLabel, "Total disposals", formatDeduction(disposalsTotal)),
+																				Boolean(disposalsTotal)
+																			)}
+																		>
+																			{formatDeduction(disposalsTotal)}
+																		</span>
 																	</td>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${depnTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatDeduction(depnTotal)}
+																		<span
+																			{...tooltipProps(
+																				buildFyTitle(totalLabel, "Total depreciation", formatDeduction(depnTotal), undefined, "Tax"),
+																				Boolean(depnTotal)
+																			)}
+																		>
+																			{formatDeduction(depnTotal)}
+																		</span>
 																	</td>
 																	<td className={`px-2 py-1 text-xs text-gray-900 ${closeTotal === 0 ? "text-center" : "text-right"}`} style={currencyCellStyle}>
-																		{formatSignedCurrency(closeTotal)}
+																		<span
+																			{...tooltipProps(
+																				buildFyTitle(totalLabel, "Close", formatSignedCurrency(closeTotal)),
+																				Boolean(closeTotal)
+																			)}
+																		>
+																			{formatSignedCurrency(closeTotal)}
+																		</span>
 																	</td>
 																</>
 															);
@@ -1838,9 +2269,7 @@ export default function Transactions() {
 									Close
 								</button>
 							</div>
-						</div>
-					</div>
-				)}
+				</ModalWrapper>
 
 				{/* Compare Reports Modal */}
 				{showCompareModal && compareReport1 !== null && compareReport2 !== null && (

@@ -37,6 +37,7 @@ export interface MonthlyDepreciation {
 	disposals: number;
 	depn: number;
 	closingValue: number;
+	revalDetails?: { type: string; note?: string; value: number }[];
 }
 
 export interface DepreciationSchedule {
@@ -550,6 +551,7 @@ export function calculateDepreciationScheduleFromHistory(
 		let acquisitions = 0;
 		let disposals = 0;
 		let revalns = 0;
+		const revalDetails: { type: string; note?: string; value: number }[] = [];
 		let disposalThisMonth = false;
 
 		const monthEvents = events.filter((event) => getFyMonthIndex(event.eventDate, financialYear) === month);
@@ -593,6 +595,13 @@ export function calculateDepreciationScheduleFromHistory(
 				const newValue = version.purchasePrice || 0;
 				const delta = newValue - currentValue;
 				revalns += delta;
+				if (delta !== 0) {
+					revalDetails.push({
+						type: version.exemptionType,
+						note: (version as any).exemptionNote,
+						value: delta,
+					});
+				}
 				currentValue = newValue;
 				slBaseCost = newValue;
 			}
@@ -629,6 +638,7 @@ export function calculateDepreciationScheduleFromHistory(
 			disposals,
 			depn: monthDepn,
 			closingValue,
+			revalDetails: revalDetails.length > 0 ? revalDetails : undefined,
 		});
 
 		totalDepn += monthDepn;
