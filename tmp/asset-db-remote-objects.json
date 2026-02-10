@@ -1,0 +1,44 @@
+[
+  {
+    "results": [
+      {
+        "name": "_cf_KV",
+        "type": "table"
+      },
+      {
+        "name": "registers",
+        "type": "table"
+      },
+      {
+        "name": "asset_groups",
+        "type": "table"
+      },
+      {
+        "name": "assets",
+        "type": "table"
+      },
+      {
+        "name": "d1_migrations",
+        "type": "table"
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "OC",
+      "served_by_colo": "AKL",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1466
+      },
+      "duration": 0.1466,
+      "changes": 0,
+      "last_row_id": 0,
+      "changed_db": false,
+      "size_after": 126976,
+      "rows_read": 17,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]
